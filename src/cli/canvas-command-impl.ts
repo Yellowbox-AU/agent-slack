@@ -283,40 +283,70 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
 }
 
 async function dispatch(parsed: ParsedArgs): Promise<void> {
-  if (parsed.positionals.length === 0) {return await commandDashboard();}
+  if (parsed.positionals.length === 0) {
+    return await commandDashboard();
+  }
   const [command, subcommand, ...rest] = parsed.positionals;
-  if (command === "init") {return await commandInit(parsed);}
-  if (command === "list") {return await commandList(parsed);}
-  if (command === "read" || command === "get") {return await commandRead(parsed);}
-  if (command === "info") {return await commandInfo(parsed);}
-  if (command === "create") {return await commandCreate(parsed);}
+  if (command === "init") {
+    return await commandInit(parsed);
+  }
+  if (command === "list") {
+    return await commandList(parsed);
+  }
+  if (command === "read" || command === "get") {
+    return await commandRead(parsed);
+  }
+  if (command === "info") {
+    return await commandInfo(parsed);
+  }
+  if (command === "create") {
+    return await commandCreate(parsed);
+  }
   if (command === "title") {
-    if (subcommand !== "set") {throw new Error("title requires set");}
+    if (subcommand !== "set") {
+      throw new Error("title requires set");
+    }
     return await commandTitle(parsedWithPositionals(parsed, rest));
   }
-  if (command === "delete") {return await commandDelete(parsed);}
-  if (command === "validate") {return await commandValidate(parsed);}
-  if (command === "append" || command === "prepend" || command === "replace")
-    {return await commandWrite(parsed, command);}
-  if (command === "section")
-    {return await commandSection(subcommand, parsedWithPositionals(parsed, rest));}
-  if (command === "table")
-    {return await commandTable(subcommand, parsedWithPositionals(parsed, rest));}
-  if (command === "mention")
-    {return await commandMention(subcommand, parsedWithPositionals(parsed, rest));}
-  if (command === "date") {return await commandDate(subcommand, parsedWithPositionals(parsed, rest));}
-  if (command === "embed")
-    {return await commandEmbed(subcommand, parsedWithPositionals(parsed, rest));}
-  if (command === "comment")
-    {return await commandComment(subcommand, parsedWithPositionals(parsed, rest));}
-  if (command === "react")
-    {return await commandReact(subcommand, parsedWithPositionals(parsed, rest));}
-  if (command === "access")
-    {return await commandAccess(subcommand, parsedWithPositionals(parsed, rest));}
-  if (command === "cover")
-    {return await commandCover(subcommand, parsedWithPositionals(parsed, rest));}
-  if (command === "favorite")
-    {return await commandFavorite(subcommand, parsedWithPositionals(parsed, rest));}
+  if (command === "delete") {
+    return await commandDelete(parsed);
+  }
+  if (command === "validate") {
+    return await commandValidate(parsed);
+  }
+  if (command === "append" || command === "prepend" || command === "replace") {
+    return await commandWrite(parsed, command);
+  }
+  if (command === "section") {
+    return await commandSection(subcommand, parsedWithPositionals(parsed, rest));
+  }
+  if (command === "table") {
+    return await commandTable(subcommand, parsedWithPositionals(parsed, rest));
+  }
+  if (command === "mention") {
+    return await commandMention(subcommand, parsedWithPositionals(parsed, rest));
+  }
+  if (command === "date") {
+    return await commandDate(subcommand, parsedWithPositionals(parsed, rest));
+  }
+  if (command === "embed") {
+    return await commandEmbed(subcommand, parsedWithPositionals(parsed, rest));
+  }
+  if (command === "comment") {
+    return await commandComment(subcommand, parsedWithPositionals(parsed, rest));
+  }
+  if (command === "react") {
+    return await commandReact(subcommand, parsedWithPositionals(parsed, rest));
+  }
+  if (command === "access") {
+    return await commandAccess(subcommand, parsedWithPositionals(parsed, rest));
+  }
+  if (command === "cover") {
+    return await commandCover(subcommand, parsedWithPositionals(parsed, rest));
+  }
+  if (command === "favorite") {
+    return await commandFavorite(subcommand, parsedWithPositionals(parsed, rest));
+  }
   throw new Error(`Unknown canvas command: ${command}`);
 }
 
@@ -342,15 +372,18 @@ async function commandDashboard(): Promise<void> {
 
 async function commandInit(parsed: ParsedArgs): Promise<void> {
   const shell = value(parsed, "--shell") ?? detectShell();
-  if (shell !== "zsh" && shell !== "bash") {throw new Error("--shell must be zsh or bash");}
+  if (shell !== "zsh" && shell !== "bash") {
+    throw new Error("--shell must be zsh or bash");
+  }
   if (bool(parsed, "--hook")) {
     process.stdout.write(canvasShellHook());
     return;
   }
   const install = bool(parsed, "--install");
   const uninstall = bool(parsed, "--uninstall");
-  if (install === uninstall)
-    {throw new Error("canvas init requires exactly one of --install or --uninstall");}
+  if (install === uninstall) {
+    throw new Error("canvas init requires exactly one of --install or --uninstall");
+  }
   const rcPath = shell === "zsh" ? join(homedir(), ".zshrc") : join(homedir(), ".bashrc");
   const markerStart = "# >>> agent-slack canvas init >>>";
   const markerEnd = "# <<< agent-slack canvas init <<<";
@@ -362,8 +395,11 @@ async function commandInit(parsed: ParsedArgs): Promise<void> {
       "\n",
     )
     .trimEnd();
-  if (install) {await writeFile(rcPath, `${stripped}${stripped ? "\n" : ""}${hook}\n`);}
-  else {await writeFile(rcPath, `${stripped}${stripped ? "\n" : ""}`);}
+  if (install) {
+    await writeFile(rcPath, `${stripped}${stripped ? "\n" : ""}${hook}\n`);
+  } else {
+    await writeFile(rcPath, `${stripped}${stripped ? "\n" : ""}`);
+  }
   writeOutput({ ok: true, shell, rc_path: rcPath, installed: install });
 }
 
@@ -439,7 +475,9 @@ async function commandCreate(parsed: ParsedArgs): Promise<void> {
     channel: value(parsed, "--channel"),
   });
   const canvasId = canvasIdFromPayload(created);
-  if (!canvasId) {throw new Error("canvases.create did not return a canvas id");}
+  if (!canvasId) {
+    throw new Error("canvases.create did not return a canvas id");
+  }
   const model = await fetchCanvasModelOrFallback(workspace, canvasId, title);
   const privateRequest = await performPrivateEdit(workspace, model, (latest) =>
     buildPrivateMarkdownDocumentData({
@@ -465,7 +503,9 @@ async function commandCreate(parsed: ParsedArgs): Promise<void> {
 async function commandTitle(parsed: ParsedArgs): Promise<void> {
   const target = targetFromArg(requiredPositional(parsed, 0, "canvas"));
   const title = requiredFlag(parsed, "--title").trim();
-  if (!title) {throw new Error("title set requires --title");}
+  if (!title) {
+    throw new Error("title set requires --title");
+  }
   const workspace = await canvasDeps.resolveCanvasWorkspace(
     target.workspaceUrl ?? activeGlobals.workspace,
   );
@@ -497,11 +537,12 @@ async function commandTitle(parsed: ParsedArgs): Promise<void> {
 async function commandDelete(parsed: ParsedArgs): Promise<void> {
   const target = targetFromArg(requiredPositional(parsed, 1, "canvas"));
   const confirm = requiredFlag(parsed, "--confirm");
-  if (confirm !== target.canvasId)
-    {throw new CanvasCommandError(
+  if (confirm !== target.canvasId) {
+    throw new CanvasCommandError(
       "confirmation_mismatch",
       "delete requires --confirm to match the canvas id",
-    );}
+    );
+  }
   const workspace = await canvasDeps.resolveCanvasWorkspace(
     target.workspaceUrl ?? activeGlobals.workspace,
   );
@@ -606,8 +647,9 @@ async function commandSection(subcommand: string | undefined, parsed: ParsedArgs
     const markdown = await readTextArg(requiredFlag(parsed, "--from"));
     const beforeId = value(parsed, "--before");
     const afterId = value(parsed, "--after");
-    if ((beforeId ? 1 : 0) + (afterId ? 1 : 0) !== 1)
-      {throw new Error("section insert requires exactly one of --before or --after");}
+    if ((beforeId ? 1 : 0) + (afterId ? 1 : 0) !== 1) {
+      throw new Error("section insert requires exactly one of --before or --after");
+    }
     const workspace = await canvasDeps.resolveCanvasWorkspace(
       target.workspaceUrl ?? activeGlobals.workspace,
     );
@@ -667,8 +709,9 @@ async function commandSection(subcommand: string | undefined, parsed: ParsedArgs
       return;
     }
     const index = before.sections.findIndex((section) => section.id === sectionId);
-    if (index < 0)
-      {throw new CanvasCommandError("section_not_found", `section not found: ${sectionId}`);}
+    if (index < 0) {
+      throw new CanvasCommandError("section_not_found", `section not found: ${sectionId}`);
+    }
     const replacementPosition = estimatedSectionPosition(index);
     const privateRequest = {
       operations: [
@@ -741,8 +784,9 @@ async function commandSection(subcommand: string | undefined, parsed: ParsedArgs
 }
 
 async function commandTable(subcommand: string | undefined, parsed: ParsedArgs): Promise<void> {
-  if (subcommand !== "insert" && subcommand !== "replace")
-    {throw new Error("table requires insert or replace");}
+  if (subcommand !== "insert" && subcommand !== "replace") {
+    throw new Error("table requires insert or replace");
+  }
   const target = targetFromArg(requiredPositional(parsed, 0, "canvas"));
   const rows = parseTableRows(await readTextArg(requiredFlag(parsed, "--from")));
   const workspace = await canvasDeps.resolveCanvasWorkspace(
@@ -842,8 +886,9 @@ async function commandMention(subcommand: string | undefined, parsed: ParsedArgs
   if (subcommand === "resolve") {
     const user = value(parsed, "--user");
     const channel = value(parsed, "--channel");
-    if ((user ? 1 : 0) + (channel ? 1 : 0) !== 1)
-      {throw new Error("mention resolve requires exactly one of --user or --channel");}
+    if ((user ? 1 : 0) + (channel ? 1 : 0) !== 1) {
+      throw new Error("mention resolve requires exactly one of --user or --channel");
+    }
     const query = user ?? channel!;
     const workspace = await canvasDeps.resolveCanvasWorkspace(activeGlobals.workspace);
     const payload = channel
@@ -854,12 +899,15 @@ async function commandMention(subcommand: string | undefined, parsed: ParsedArgs
     writeOutput({ ok: true, query, response: payload });
     return;
   }
-  if (subcommand !== "insert") {throw new Error("mention requires resolve or insert");}
+  if (subcommand !== "insert") {
+    throw new Error("mention requires resolve or insert");
+  }
   const target = targetFromArg(requiredPositional(parsed, 0, "canvas"));
   const user = value(parsed, "--user");
   const channel = value(parsed, "--channel");
-  if ((user ? 1 : 0) + (channel ? 1 : 0) !== 1)
-    {throw new Error("mention insert requires exactly one of --user or --channel");}
+  if ((user ? 1 : 0) + (channel ? 1 : 0) !== 1) {
+    throw new Error("mention insert requires exactly one of --user or --channel");
+  }
   const workspace = await canvasDeps.resolveCanvasWorkspace(
     target.workspaceUrl ?? activeGlobals.workspace,
   );
@@ -900,7 +948,9 @@ async function commandMention(subcommand: string | undefined, parsed: ParsedArgs
 }
 
 async function commandDate(subcommand: string | undefined, parsed: ParsedArgs): Promise<void> {
-  if (subcommand !== "insert") {throw new Error("date requires insert");}
+  if (subcommand !== "insert") {
+    throw new Error("date requires insert");
+  }
   const target = targetFromArg(requiredPositional(parsed, 0, "canvas"));
   const dateValue = requiredFlag(parsed, "--date");
   const timestamp = parseDateFlag(dateValue);
@@ -966,7 +1016,9 @@ async function commandEmbed(subcommand: string | undefined, parsed: ParsedArgs):
   if (subcommand === "remove") {
     const target = targetFromArg(requiredPositional(parsed, 0, "canvas"));
     const embed = value(parsed, "--embed") ?? value(parsed, "--section");
-    if (!embed) {throw new CanvasCommandError("missing_embed", "Missing --embed");}
+    if (!embed) {
+      throw new CanvasCommandError("missing_embed", "Missing --embed");
+    }
     const workspace = await canvasDeps.resolveCanvasWorkspace(
       target.workspaceUrl ?? activeGlobals.workspace,
     );
@@ -1003,7 +1055,9 @@ async function commandEmbed(subcommand: string | undefined, parsed: ParsedArgs):
     });
     return;
   }
-  if (subcommand !== "add") {throw new Error("embed requires list, add, or remove");}
+  if (subcommand !== "add") {
+    throw new Error("embed requires list, add, or remove");
+  }
   const target = targetFromArg(requiredPositional(parsed, 0, "canvas"));
   const embedType = requiredFlag(parsed, "--type");
   const source = embedSource(parsed, embedType);
@@ -1113,11 +1167,12 @@ async function commandEmbed(subcommand: string | undefined, parsed: ParsedArgs):
       : embedType === "message"
         ? await performPrivateEdit(workspace, before, (latest) => {
             const message = parseMessagePermalink(storedValue);
-            if (!message)
-              {throw new CanvasCommandError(
+            if (!message) {
+              throw new CanvasCommandError(
                 "invalid_message",
                 `Invalid Slack message URL: ${storedValue}`,
-              );}
+              );
+            }
             return buildPrivateMessageEmbedDocumentData({
               ...privateDocumentInput(latest, "", "append"),
               channel: message.channel,
@@ -1143,7 +1198,9 @@ async function commandEmbed(subcommand: string | undefined, parsed: ParsedArgs):
       section.text.includes(uploaded?.title ?? embedValue) || section.text.includes(embedValue),
   );
   const verification = verifyEmbed(after, embedValue, uploaded?.title, afterStrings);
-  if (verification.verified) {await recordMutation(key, target.canvasId, after.file);}
+  if (verification.verified) {
+    await recordMutation(key, target.canvasId, after.file);
+  }
   writeOutput({
     ok: true,
     canvas_id: target.canvasId,
@@ -1288,7 +1345,9 @@ async function commandComment(subcommand: string | undefined, parsed: ParsedArgs
     const before = await fetchCanvasModel(workspace, target.canvasId);
     const inputTs =
       value(parsed, "--thread-ts") ?? value(parsed, "--comment") ?? parsed.positionals[1];
-    if (!inputTs) {throw new Error("comment resolve requires --thread-ts or --comment");}
+    if (!inputTs) {
+      throw new Error("comment resolve requires --thread-ts or --comment");
+    }
     const key = idempotencyKey("comment.resolve", target.canvasId, inputTs);
     const thread = await loadCommentThread(workspace, before, inputTs);
     if (commentThreadArchived(thread.messages) || threadResolved(before, thread.threadTs)) {
@@ -1363,8 +1422,9 @@ async function commandReact(subcommand: string | undefined, parsed: ParsedArgs):
     );
     return;
   }
-  if (subcommand !== "add" && subcommand !== "remove")
-    {throw new Error("react requires list, add, or remove");}
+  if (subcommand !== "add" && subcommand !== "remove") {
+    throw new Error("react requires list, add, or remove");
+  }
   const before = await fetchCanvasModel(workspace, target.canvasId);
   const emoji = stripEmojiColons(requiredFlag(parsed, "--emoji"));
   const span = resolveSpanTarget(before, parsed);
@@ -1888,7 +1948,7 @@ async function fetchCanvasModel(
   canvasId: string,
 ): Promise<CanvasModel> {
   const result = await canvasDeps.readCanvas(workspace, canvasId);
-  const {file} = result;
+  const { file } = result;
   const threadId = stringValue(file.quip_thread_id) ?? stringValue(file.thread_ts) ?? canvasId;
   const docId =
     stringValue(file.document_id) ??
@@ -1942,7 +2002,9 @@ async function fetchCanvasModelMaybe(
     return await fetchCanvasModel(workspace, canvasId);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    if (/not_found|file_not_found|file_deleted|deleted|missing/i.test(message)) {return undefined;}
+    if (/not_found|file_not_found|file_deleted|deleted|missing/i.test(message)) {
+      return undefined;
+    }
     throw error;
   }
 }
@@ -2095,38 +2157,47 @@ function buildEditDocumentBody(model: CanvasModel, data: Buffer): URLSearchParam
 
 function resolveSpanTarget(model: CanvasModel, parsed: ParsedArgs): SpanTarget {
   const sectionId = value(parsed, "--section");
-  if (!sectionId)
-    {throw new CanvasCommandError("missing_section", "comment/react requires --section");}
+  if (!sectionId) {
+    throw new CanvasCommandError("missing_section", "comment/react requires --section");
+  }
   const anchor = value(parsed, "--anchor");
   const quote = value(parsed, "--quote");
   const occurrence = value(parsed, "--occurrence");
-  if (anchor && (quote || occurrence))
-    {throw new CanvasCommandError(
+  if (anchor && (quote || occurrence)) {
+    throw new CanvasCommandError(
       "ambiguous_anchor",
       "pass --anchor or --quote plus --occurrence, not both",
-    );}
-  if (!anchor && !quote && !occurrence)
-    {throw new CanvasCommandError("missing_anchor", "pass --anchor or --quote plus --occurrence");}
-  if (quote && !occurrence)
-    {throw new CanvasCommandError("missing_occurrence", "--quote requires --occurrence");}
-  if (occurrence && !quote)
-    {throw new CanvasCommandError("missing_quote", "--occurrence requires --quote");}
-  if (anchor)
-    {return {
+    );
+  }
+  if (!anchor && !quote && !occurrence) {
+    throw new CanvasCommandError("missing_anchor", "pass --anchor or --quote plus --occurrence");
+  }
+  if (quote && !occurrence) {
+    throw new CanvasCommandError("missing_occurrence", "--quote requires --occurrence");
+  }
+  if (occurrence && !quote) {
+    throw new CanvasCommandError("missing_quote", "--occurrence requires --quote");
+  }
+  if (anchor) {
+    return {
       sectionId,
       anchorId: anchor,
       threadTs: threadTsForAnnotation(anchor),
       selectedText: sectionText(model, sectionId) || sectionId,
-    };}
+    };
+  }
   const section = model.sections.find((candidate) => candidate.id === sectionId);
-  if (!section) {throw new CanvasCommandError("missing_section", `section not found: ${sectionId}`);}
+  if (!section) {
+    throw new CanvasCommandError("missing_section", `section not found: ${sectionId}`);
+  }
   const occurrenceNumber = clampInt(occurrence!, 1, Number.MAX_SAFE_INTEGER);
   const index = nthOccurrenceIndex(section.text, quote!, occurrenceNumber);
-  if (index < 0)
-    {throw new CanvasCommandError(
+  if (index < 0) {
+    throw new CanvasCommandError(
       "quote_not_found",
       "quote occurrence was not found in the selected section",
-    );}
+    );
+  }
   const anchorId = stableAnnotationId(sectionId, quote!, occurrence!);
   return {
     sectionId,
@@ -2141,8 +2212,9 @@ function resolveSpanTarget(model: CanvasModel, parsed: ParsedArgs): SpanTarget {
 async function readCommentText(parsed: ParsedArgs): Promise<string> {
   const text = value(parsed, "--text");
   const from = value(parsed, "--from");
-  if ((text ? 1 : 0) + (from ? 1 : 0) !== 1)
-    {throw new Error("comment add requires exactly one of --text or --from");}
+  if ((text ? 1 : 0) + (from ? 1 : 0) !== 1) {
+    throw new Error("comment add requires exactly one of --text or --from");
+  }
   return text ?? (await readTextArg(from!));
 }
 
@@ -2169,11 +2241,12 @@ async function openAnnotationThread(
     messages.map((message) => stringField(message, "ts")).find(Boolean) ??
     stringField(response, "ts") ??
     stringField(response, "thread_ts");
-  if (!ts)
-    {throw new CanvasCommandError(
+  if (!ts) {
+    throw new CanvasCommandError(
       "annotation_thread_not_found",
       "Slack did not return a root thread for the Canvas annotation",
-    );}
+    );
+  }
   return { threadTs: ts, messages };
 }
 
@@ -2198,7 +2271,9 @@ async function loadCommentThread(
     firstMessages.map((message) => stringField(message, "thread_ts")).find(Boolean) ??
     stringField(first, "thread_ts") ??
     ts;
-  if (threadTs === ts) {return { threadTs, messages: firstMessages };}
+  if (threadTs === ts) {
+    return { threadTs, messages: firstMessages };
+  }
   const root = await canvasDeps.slackApi(workspace, "conversations.replies", {
     channel: model.fileChannel,
     ts: threadTs,
@@ -2460,7 +2535,9 @@ async function resolveAnnotationThread(
   model: CanvasModel,
   annotation: { anchorId?: string; threadTs: string; selectedText?: string; sectionId?: string },
 ): Promise<{ anchorId?: string; threadTs: string; selectedText?: string; sectionId?: string }> {
-  if (!annotation.anchorId || !annotation.selectedText || !annotation.sectionId) {return annotation;}
+  if (!annotation.anchorId || !annotation.selectedText || !annotation.sectionId) {
+    return annotation;
+  }
   const thread = await openAnnotationThread(workspace, model, {
     anchorId: annotation.anchorId,
     threadTs: annotation.threadTs,
@@ -2486,8 +2563,9 @@ async function safeCanvasThreadReactions(
       /message_not_found|thread_not_found|channel_not_found/.test(
         error instanceof Error ? error.message : String(error),
       )
-    )
-      {return [];}
+    ) {
+      return [];
+    }
     throw error;
   }
 }
@@ -2495,9 +2573,7 @@ async function safeCanvasThreadReactions(
 async function canvasAnnotations(
   workspace: CanvasWorkspace,
   model: CanvasModel,
-): Promise<
-  { anchorId: string; threadTs: string; selectedText?: string; sectionId?: string }[]
-> {
+): Promise<{ anchorId: string; threadTs: string; selectedText?: string; sectionId?: string }[]> {
   const strings = await canvasDeps.fetchCanvasLoadDataStrings(workspace, {
     canvasId: model.canvasId,
     threadId: model.threadId,
@@ -2511,7 +2587,9 @@ async function canvasAnnotations(
     for (const match of source.matchAll(/<annotation\b([^>]*)>([\s\S]*?)<\/annotation>/g)) {
       const attrs = match[1] ?? "";
       const anchorId = attrValue(attrs, "id");
-      if (!anchorId) {continue;}
+      if (!anchorId) {
+        continue;
+      }
       const selectedText = stripAnnotationText(match[2] ?? "");
       annotations.set(anchorId, {
         anchorId,
@@ -2647,8 +2725,12 @@ function desiredWriteReached(
 ): boolean {
   const current = comparableCanvasText(model.markdown);
   const desired = comparableCanvasText(markdown);
-  if (operation === "replace") {return current === desired;}
-  if (!desired) {return true;}
+  if (operation === "replace") {
+    return current === desired;
+  }
+  if (!desired) {
+    return true;
+  }
   return (
     current.includes(desired) ||
     comparableCanvasParts(markdown).every((part) => current.includes(part))
@@ -2672,7 +2754,9 @@ function tableReplacementDeleteSectionIds(model: CanvasModel, tableTarget: strin
 
 function tableReplacementPosition(model: CanvasModel, tableTarget: string): string {
   const directIndex = model.sections.findIndex((section) => section.id === tableTarget);
-  if (directIndex >= 0) {return estimatedSectionPosition(directIndex);}
+  if (directIndex >= 0) {
+    return estimatedSectionPosition(directIndex);
+  }
   const firstCellId = tableCellSectionIdGroupsFromHtml(model.html).flat()[0];
   const cellIndex = firstCellId
     ? model.sections.findIndex((section) => section.id === firstCellId)
@@ -2681,7 +2765,9 @@ function tableReplacementPosition(model: CanvasModel, tableTarget: string): stri
 }
 
 function tableCellSectionIdGroupsFromHtml(html?: string): string[][] {
-  if (!html) {return [];}
+  if (!html) {
+    return [];
+  }
   return [...html.matchAll(/<table\b[^>]*>([\s\S]*?)<\/table>/gi)].map((table) => {
     return [...(table[1] ?? "").matchAll(/\bid\s*=\s*(?:"([^"]+)"|'([^']+)')/gi)]
       .map((match) => match[1] ?? match[2] ?? "")
@@ -2695,8 +2781,9 @@ function dateInsertionReached(model: CanvasModel, timestamp: number, fallback: s
     model.markdown.includes(fallback) ||
     model.markdown.includes(String(timestamp)) ||
     current.includes(comparableCanvasText(fallback).split(" ").slice(0, 2).join(" "))
-  )
-    {return true;}
+  ) {
+    return true;
+  }
   const htmlInsertions = model.html ? extractSpecialInsertions(model.html) : [];
   return htmlInsertions.some(
     (entry) =>
@@ -2745,7 +2832,9 @@ function sectionIdForAnnotationText(
   model: CanvasModel,
   text: string | undefined,
 ): string | undefined {
-  if (!text) {return undefined;}
+  if (!text) {
+    return undefined;
+  }
   return model.sections.find((section) => section.text.includes(text))?.id;
 }
 
@@ -2767,12 +2856,17 @@ function sectionInsertionReached(
   afterId?: string,
 ): boolean {
   const desired = comparableCanvasText(markdown);
-  if (!desired) {return true;}
+  if (!desired) {
+    return true;
+  }
   const anchorId = beforeId ?? afterId;
-  if (!anchorId)
-    {return model.sections.some((section) => comparableCanvasText(section.text) === desired);}
+  if (!anchorId) {
+    return model.sections.some((section) => comparableCanvasText(section.text) === desired);
+  }
   const anchorIndex = model.sections.findIndex((section) => section.id === anchorId);
-  if (anchorIndex < 0) {return false;}
+  if (anchorIndex < 0) {
+    return false;
+  }
   const expectedIndex = beforeId ? anchorIndex - 1 : anchorIndex + 1;
   const candidate = model.sections[expectedIndex];
   return Boolean(candidate && comparableCanvasText(candidate.text) === desired);
@@ -2785,12 +2879,14 @@ function markdownTables(markdown: string): string[][][] {
     if (
       !/^\s*\|.*\|\s*$/.test(lines[i]) ||
       !/^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(lines[i + 1])
-    )
-      {continue;}
+    ) {
+      continue;
+    }
     const rows = [splitMarkdownTableRow(lines[i])];
     i += 2;
-    while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i]))
-      {rows.push(splitMarkdownTableRow(lines[i++]));}
+    while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) {
+      rows.push(splitMarkdownTableRow(lines[i++]));
+    }
     tables.push(normalizeTableRowsForCompare(rows));
   }
   return tables;
@@ -2878,7 +2974,9 @@ function resourcesFromCanvasStrings(
     const value = strings[i];
     for (const canvasMatch of value.matchAll(/\bsd:(F[A-Z0-9]{8,})(?:\/[^\s"'<>]+)?\b/g)) {
       const canvasId = canvasMatch[1];
-      if (!canvasId) {continue;}
+      if (!canvasId) {
+        continue;
+      }
       resources.push(
         enrichCanvasResource(workspace, {
           type: "slack_canvas",
@@ -2893,7 +2991,9 @@ function resourcesFromCanvasStrings(
     for (const messageMatch of value.matchAll(/\bsm:([CGD][A-Z0-9]+)\/([0-9]+(?:\.[0-9]+)?)\b/g)) {
       const channel = messageMatch[1];
       const rawTs = messageMatch[2];
-      if (!channel || !rawTs) {continue;}
+      if (!channel || !rawTs) {
+        continue;
+      }
       const ts = normalizeMessageTs(rawTs);
       const url = buildSlackMessageUrl(workspace.workspace_url, channel, ts);
       resources.push(
@@ -2936,15 +3036,21 @@ function resourcesFromCanvasStrings(
         stripTags(anchor[3] ?? "").trim() || undefined,
         nearestSectionId(strings, i),
       );
-      if (resource) {resources.push(resource);}
+      if (resource) {
+        resources.push(resource);
+      }
     }
     for (const link of value.matchAll(/\[([^\]\n]+)]\(([^)\s]+)\)/g)) {
       const resource = resourceFromUrl(workspace, link[2], link[1], nearestSectionId(strings, i));
-      if (resource) {resources.push(resource);}
+      if (resource) {
+        resources.push(resource);
+      }
     }
     if (/^https:\/\/[^/\s]+\.slack\.com\/archives\/[CGD][A-Z0-9]+\/p\d+$/.test(value)) {
       const resource = resourceFromUrl(workspace, value, undefined, nearestSectionId(strings, i));
-      if (resource) {resources.push(resource);}
+      if (resource) {
+        resources.push(resource);
+      }
     }
   }
   return dedupeCanvasResources(resources);
@@ -2966,13 +3072,17 @@ function resourcesFromSectionText(
   const resources: CanvasResource[] = [];
   for (const link of section.text.matchAll(/\[([^\]\n]+)]\(([^)\s]+)\)/g)) {
     const resource = resourceFromUrl(workspace, link[2], link[1], section.id);
-    if (resource) {resources.push(resource);}
+    if (resource) {
+      resources.push(resource);
+    }
   }
   for (const url of section.text.matchAll(
     /https:\/\/[^/\s]+\.slack\.com\/(?:archives\/[CGD][A-Z0-9]+\/p\d+|docs(?:\/[A-Z0-9]+)?\/F[A-Z0-9]{8,})/g,
   )) {
     const resource = resourceFromUrl(workspace, url[0], undefined, section.id);
-    if (resource) {resources.push(resource);}
+    if (resource) {
+      resources.push(resource);
+    }
   }
   return resources;
 }
@@ -3016,8 +3126,8 @@ function resourceFromUrl(
     rawUrl.match(/^slack-file:\/\/(F[A-Z0-9]{8,})$/)?.[1] ??
     rawUrl.match(/\/files\/[UW][A-Z0-9]+\/(F[A-Z0-9]+)/)?.[1] ??
     rawUrl.match(/files-pri\/[^/]+-(F[A-Z0-9]+)/)?.[1];
-  if (fileId)
-    {return {
+  if (fileId) {
+    return {
       type: "slack_file",
       kind: "file",
       url: rawUrl,
@@ -3025,9 +3135,11 @@ function resourceFromUrl(
       id: fileId,
       file_id: fileId,
       section_id: sectionId,
-    };}
-  if (/^https?:\/\//.test(rawUrl))
-    {return { type: "link", kind: "link", url: rawUrl, text, id: rawUrl, section_id: sectionId };}
+    };
+  }
+  if (/^https?:\/\//.test(rawUrl)) {
+    return { type: "link", kind: "link", url: rawUrl, text, id: rawUrl, section_id: sectionId };
+  }
   return undefined;
 }
 
@@ -3048,7 +3160,9 @@ function dedupeCanvasResources(resources: CanvasResource[]): CanvasResource[] {
   const seen = new Set<string>();
   return resources.filter((resource) => {
     const key = `${resource.type}\0${resource.id ?? resource.url}\0${resource.section_id ?? ""}`;
-    if (seen.has(key)) {return false;}
+    if (seen.has(key)) {
+      return false;
+    }
     seen.add(key);
     return true;
   });
@@ -3060,11 +3174,15 @@ function sectionIdForEmbed(
   strings: string[],
   embed: string,
 ): string | undefined {
-  if (model.sections.some((section) => section.id === embed)) {return embed;}
+  if (model.sections.some((section) => section.id === embed)) {
+    return embed;
+  }
   const resource = collectCanvasEmbeds(workspace, model, strings).find((candidate) =>
     resourceMatchesEmbed(candidate, embed),
   );
-  if (resource?.section_id) {return resource.section_id;}
+  if (resource?.section_id) {
+    return resource.section_id;
+  }
   return (
     model.sections.find(
       (section) =>
@@ -3080,8 +3198,9 @@ function sectionIdFromCanvasStrings(strings: string[], embed: string): string | 
   const canvasId = canvasIdFromEmbedSource(embed);
   for (let i = 0; i < strings.length; i++) {
     const value = strings[i];
-    if (value.includes(embed) || Boolean(canvasId && value.includes(canvasId)))
-      {return nearestSectionId(strings, i);}
+    if (value.includes(embed) || Boolean(canvasId && value.includes(canvasId))) {
+      return nearestSectionId(strings, i);
+    }
   }
   return undefined;
 }
@@ -3103,7 +3222,9 @@ function resourceMatchesEmbed(resource: CanvasResource, embed: string, title?: s
 
 function nearestSectionId(strings: string[], index: number): string | undefined {
   for (let i = index; i >= Math.max(0, index - 8); i--) {
-    if (/^temp:C:[A-Za-z0-9]+$/.test(strings[i])) {return strings[i];}
+    if (/^temp:C:[A-Za-z0-9]+$/.test(strings[i])) {
+      return strings[i];
+    }
   }
   return undefined;
 }
@@ -3147,12 +3268,17 @@ function threadContainsText(messages: Record<string, unknown>[], text: string): 
 
 function parseTableRows(input: string): string[][] {
   const trimmed = input.trim();
-  if (!trimmed) {throw new Error("table input is empty");}
+  if (!trimmed) {
+    throw new Error("table input is empty");
+  }
   if (trimmed.startsWith("[")) {
     const value = JSON.parse(trimmed) as unknown;
-    if (!Array.isArray(value)) {throw new Error("table JSON must be an array");}
-    if (value.every(Array.isArray))
-      {return value.map((row) => row.map((cell) => String(cell ?? "")));}
+    if (!Array.isArray(value)) {
+      throw new Error("table JSON must be an array");
+    }
+    if (value.every(Array.isArray)) {
+      return value.map((row) => row.map((cell) => String(cell ?? "")));
+    }
     if (value.every(isRecord)) {
       const columns = [
         ...new Set(value.flatMap((row) => Object.keys(row as Record<string, unknown>))),
@@ -3199,7 +3325,9 @@ function parseCsvLine(line: string): string[] {
 }
 
 function rowsToMarkdown(rows: string[][]): string {
-  if (!rows.length) {return "";}
+  if (!rows.length) {
+    return "";
+  }
   const width = Math.max(...rows.map((row) => row.length));
   const normalized = rows.map((row) => [
     ...row,
@@ -3214,9 +3342,15 @@ function positionFromPlacement(parsed: ParsedArgs, required: boolean): string | 
   const flags = ["--before", "--after", "--at"]
     .map((flag) => ({ flag, value: value(parsed, flag) }))
     .filter((entry): entry is { flag: string; value: string } => Boolean(entry.value));
-  if (required && flags.length !== 1) {throw new Error("insert requires exactly one placement flag");}
-  if (!required && flags.length === 0) {return undefined;}
-  if (flags.length !== 1) {throw new Error("pass only one placement flag");}
+  if (required && flags.length !== 1) {
+    throw new Error("insert requires exactly one placement flag");
+  }
+  if (!required && flags.length === 0) {
+    return undefined;
+  }
+  if (flags.length !== 1) {
+    throw new Error("pass only one placement flag");
+  }
   return `${flags[0].flag.slice(2)}:${flags[0].value}`;
 }
 
@@ -3229,11 +3363,21 @@ function positionForPlacementFromParsed(
   const after = value(parsed, "--after");
   const at = value(parsed, "--at");
   const count = (before ? 1 : 0) + (after ? 1 : 0) + (at ? 1 : 0);
-  if (required && count !== 1) {throw new Error("insert requires exactly one placement flag");}
-  if (!required && count === 0) {return undefined;}
-  if (count !== 1) {throw new Error("pass only one placement flag");}
-  if (before) {return positionForPlacement(model, { before });}
-  if (after) {return positionForPlacement(model, { after });}
+  if (required && count !== 1) {
+    throw new Error("insert requires exactly one placement flag");
+  }
+  if (!required && count === 0) {
+    return undefined;
+  }
+  if (count !== 1) {
+    throw new Error("pass only one placement flag");
+  }
+  if (before) {
+    return positionForPlacement(model, { before });
+  }
+  if (after) {
+    return positionForPlacement(model, { after });
+  }
   return at === "start" ? "aaZ:temp" : undefined;
 }
 
@@ -3243,19 +3387,23 @@ function positionForPlacement(
 ): string {
   const anchorId = placement.before ?? placement.after;
   const index = model.sections.findIndex((section) => section.id === anchorId);
-  if (index < 0)
-    {throw new CanvasCommandError("section_not_found", `section not found: ${anchorId}`);}
-  if (placement.before)
-    {return index === 0
+  if (index < 0) {
+    throw new CanvasCommandError("section_not_found", `section not found: ${anchorId}`);
+  }
+  if (placement.before) {
+    return index === 0
       ? "aaZ:temp"
-      : midpointPosition(estimatedSectionPosition(index - 1), estimatedSectionPosition(index));}
+      : midpointPosition(estimatedSectionPosition(index - 1), estimatedSectionPosition(index));
+  }
   return index >= model.sections.length - 1
     ? estimatedSectionPosition(index + 1)
     : midpointPosition(estimatedSectionPosition(index), estimatedSectionPosition(index + 1));
 }
 
 function estimatedSectionPosition(index: number): string {
-  if (index < 0) {return "aaZ:temp";}
+  if (index < 0) {
+    return "aaZ:temp";
+  }
   const alphabet = "abcdefghijklmnopqrstuvwxyz";
   const first = Math.floor(index / alphabet.length);
   const second = index % alphabet.length;
@@ -3270,14 +3418,18 @@ function midpointPosition(left: string, _right: string): string {
 function parseDateFlag(input: string): number {
   const lower = input.toLowerCase();
   const now = new Date();
-  if (lower === "today")
-    {return Math.floor(new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000);}
-  if (lower === "tomorrow")
-    {return Math.floor(
+  if (lower === "today") {
+    return Math.floor(new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000);
+  }
+  if (lower === "tomorrow") {
+    return Math.floor(
       new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime() / 1000,
-    );}
+    );
+  }
   const date = /^\d+$/.test(input) ? new Date(Number(input) * 1000) : new Date(input);
-  if (Number.isNaN(date.getTime())) {throw new Error(`Invalid --date value: ${input}`);}
+  if (Number.isNaN(date.getTime())) {
+    throw new Error(`Invalid --date value: ${input}`);
+  }
   return Math.floor(date.getTime() / 1000);
 }
 
@@ -3285,7 +3437,9 @@ function embedSource(parsed: ParsedArgs, embedType: string): { flag: string; val
   const sourceFlags = ["--file", "--url", "--canvas", "--message"]
     .map((flag) => ({ flag, value: value(parsed, flag) }))
     .filter((entry): entry is { flag: string; value: string } => Boolean(entry.value));
-  if (sourceFlags.length !== 1) {throw new Error("embed add requires exactly one source flag");}
+  if (sourceFlags.length !== 1) {
+    throw new Error("embed add requires exactly one source flag");
+  }
   const allowed: Record<string, string[]> = {
     image: ["--file", "--url"],
     file: ["--file"],
@@ -3294,14 +3448,19 @@ function embedSource(parsed: ParsedArgs, embedType: string): { flag: string; val
     message: ["--message"],
   };
   const allowedFlags = allowed[embedType];
-  if (!allowedFlags) {throw new Error("--type must be image, file, link, canvas, or message");}
-  if (!allowedFlags.includes(sourceFlags[0].flag))
-    {throw new Error(`${embedType} embed requires ${allowedFlags.join(" or ")}`);}
+  if (!allowedFlags) {
+    throw new Error("--type must be image, file, link, canvas, or message");
+  }
+  if (!allowedFlags.includes(sourceFlags[0].flag)) {
+    throw new Error(`${embedType} embed requires ${allowedFlags.join(" or ")}`);
+  }
   return sourceFlags[0];
 }
 
 async function embedSourceIdentity(source: { flag: string; value: string }): Promise<string> {
-  if (source.flag !== "--file") {return source.value;}
+  if (source.flag !== "--file") {
+    return source.value;
+  }
   const bytes = await readFile(source.value);
   const hash = createHash("sha256").update(bytes).digest("hex").slice(0, 16);
   return `${basename(source.value)}:${hash}`;
@@ -3318,18 +3477,27 @@ function embedStoredValue(workspace: CanvasWorkspace, embedType: string, source:
 }
 
 function embedMarkdown(embedType: string, source: string, text?: string): string {
-  if (embedType === "image")
-    {return source.startsWith("F")
+  if (embedType === "image") {
+    return source.startsWith("F")
       ? `<file:${source}|${text ?? source}>`
-      : `![${text ?? basename(source)}](${source})`;}
-  if (embedType === "file") {return `<file:${source}|${text ?? source}>`;}
-  if (embedType === "canvas") {return `[${text ?? "Canvas"}](${source})`;}
-  if (embedType === "message") {return source;}
+      : `![${text ?? basename(source)}](${source})`;
+  }
+  if (embedType === "file") {
+    return `<file:${source}|${text ?? source}>`;
+  }
+  if (embedType === "canvas") {
+    return `[${text ?? "Canvas"}](${source})`;
+  }
+  if (embedType === "message") {
+    return source;
+  }
   return `[${text ?? source}](${source})`;
 }
 
 function canvasIdFromEmbedSource(source: string): string | undefined {
-  if (isCanvasId(source)) {return source;}
+  if (isCanvasId(source)) {
+    return source;
+  }
   return source.match(/\/docs(?:\/[A-Z0-9]+)?\/(F[A-Z0-9]{8,})/)?.[1];
 }
 
@@ -3338,11 +3506,15 @@ function positionForEmbedPlacementFromParsed(
   parsed: ParsedArgs,
 ): string | undefined {
   const section = value(parsed, "--section");
-  if (!section) {return positionForPlacementFromParsed(model, parsed, false);}
+  if (!section) {
+    return positionForPlacementFromParsed(model, parsed, false);
+  }
   const before = value(parsed, "--before");
   const after = value(parsed, "--after");
   const at = value(parsed, "--at");
-  if (before || after || at) {throw new Error("pass only one placement flag");}
+  if (before || after || at) {
+    throw new Error("pass only one placement flag");
+  }
   return positionForPlacement(model, { after: section });
 }
 
@@ -3370,7 +3542,9 @@ async function resolveHeaderId(workspace: CanvasWorkspace, name: string): Promis
       header.name.toLowerCase() === lower ||
       header.title.toLowerCase() === lower,
   );
-  if (!match) {throw new Error(`Unknown canvas header: ${name}`);}
+  if (!match) {
+    throw new Error(`Unknown canvas header: ${name}`);
+  }
   return match.id;
 }
 
@@ -3403,10 +3577,13 @@ function normalizeHeaders(
 }
 
 function currentCoverId(file: CanvasFile): string | undefined {
-  const {cover} = file;
-  if (typeof cover === "string") {return cover || undefined;}
-  if (isRecord(cover))
-    {return stringValue(cover.header_id) ?? stringValue(cover.id) ?? stringValue(cover.name);}
+  const { cover } = file;
+  if (typeof cover === "string") {
+    return cover || undefined;
+  }
+  if (isRecord(cover)) {
+    return stringValue(cover.header_id) ?? stringValue(cover.id) ?? stringValue(cover.name);
+  }
   return stringValue(file.cover_header_id) ?? stringValue(file.header_id);
 }
 
@@ -3425,22 +3602,32 @@ function titleSectionIdForCover(model: CanvasModel): string {
 function titleBlockId(file: CanvasFile): string | undefined {
   const blocks = arrayValue(file.title_blocks);
   for (const block of blocks) {
-    if (!isRecord(block)) {continue;}
+    if (!isRecord(block)) {
+      continue;
+    }
     const id = stringValue(block.block_id);
-    if (id) {return id;}
+    if (id) {
+      return id;
+    }
   }
   return undefined;
 }
 
 function currentAccessLevel(file: CanvasFile): "read" | "write" | "invitation" | undefined {
-  if (file.is_restricted_sharing_enabled === true) {return "invitation";}
+  if (file.is_restricted_sharing_enabled === true) {
+    return "invitation";
+  }
   const value =
     stringValue(file.workspace_access) ??
     stringValue(file.cross_workspace_access) ??
     stringValue(file.access_level) ??
     stringValue(file.org_or_workspace_access);
-  if (value === "read" || value === "write" || value === "invitation") {return value;}
-  if (value === "none" || value === "private" || value === "restricted") {return "invitation";}
+  if (value === "read" || value === "write" || value === "invitation") {
+    return value;
+  }
+  if (value === "none" || value === "private" || value === "restricted") {
+    return "invitation";
+  }
   return undefined;
 }
 
@@ -3489,7 +3676,9 @@ function accessGrantReached(
       target.kind === "user"
         ? grant.target === target.id
         : grant.target === target.channel || grant.channel === target.channel;
-    if (!targetMatches) {return false;}
+    if (!targetMatches) {
+      return false;
+    }
     return !level || grant.level === level || (target.kind === "channel" && grant.level == null);
   });
 }
@@ -3501,10 +3690,14 @@ function extractAccessGrants(
   const grants: { kind: string; target: string; channel?: string; level?: string }[] = [];
   const visit = (value: unknown, inheritedChannel?: string): void => {
     if (Array.isArray(value)) {
-      for (const child of value) {visit(child, inheritedChannel);}
+      for (const child of value) {
+        visit(child, inheritedChannel);
+      }
       return;
     }
-    if (!isRecord(value)) {return;}
+    if (!isRecord(value)) {
+      return;
+    }
     const channel = stringValue(value.channel) ?? stringValue(value.channel_id) ?? inheritedChannel;
     const user =
       stringValue(value.user) ?? stringValue(value.user_id) ?? stringValue(value.slack_user_id);
@@ -3514,9 +3707,12 @@ function extractAccessGrants(
       stringValue(value.access_level) ??
       stringValue(value.level) ??
       stringValue(value.access);
-    if (target) {grants.push({ kind: user ? "user" : "channel", target, channel, level });}
-    for (const [key, child] of Object.entries(value))
-      {visit(child, /^[CDG][A-Z0-9]{8,}$/.test(key) ? key : channel);}
+    if (target) {
+      grants.push({ kind: user ? "user" : "channel", target, channel, level });
+    }
+    for (const [key, child] of Object.entries(value)) {
+      visit(child, /^[CDG][A-Z0-9]{8,}$/.test(key) ? key : channel);
+    }
   };
   visit(file.shares);
   visit(shares);
@@ -3529,7 +3725,9 @@ function dedupeGrants(
   const seen = new Set<string>();
   return grants.filter((grant) => {
     const key = `${grant.kind}\0${grant.target}\0${grant.channel ?? ""}\0${grant.level ?? ""}`;
-    if (seen.has(key)) {return false;}
+    if (seen.has(key)) {
+      return false;
+    }
     seen.add(key);
     return true;
   });
@@ -3544,7 +3742,9 @@ async function resolveAccessTarget(
   parsed: ParsedArgs,
 ): Promise<AccessTarget> {
   const channel = value(parsed, "--channel");
-  if (channel) {return { kind: "channel", id: channel, channel };}
+  if (channel) {
+    return { kind: "channel", id: channel, channel };
+  }
   const user = value(parsed, "--user") ?? requiredPositional(parsed, 1, "user-or-channel");
   const resolved = userIdFromUserPayload(await resolveSlackUser(workspace, user));
   const payload = await canvasDeps.slackApi(workspace, "conversations.open", { users: resolved });
@@ -3553,8 +3753,9 @@ async function resolveAccessTarget(
     typeof payload.channel === "object" &&
     "id" in payload.channel &&
     typeof payload.channel.id === "string"
-  )
-    {return { kind: "user", id: resolved, channel: payload.channel.id };}
+  ) {
+    return { kind: "user", id: resolved, channel: payload.channel.id };
+  }
   throw new Error(`Could not open direct message for ${user}`);
 }
 
@@ -3587,14 +3788,17 @@ async function resolveSlackUser(
       .map((value) => (typeof value === "string" ? value.replace(/^@/, "").toLowerCase() : ""))
       .includes(lower);
   });
-  if (!member) {throw new CanvasCommandError("user_not_found", `user not found: ${input}`);}
+  if (!member) {
+    throw new CanvasCommandError("user_not_found", `user not found: ${input}`);
+  }
   return { ok: true, user: member };
 }
 
 function userIdFromUserPayload(payload: Record<string, unknown>): string {
   const id = userIdFromUserPayloadMaybe(payload);
-  if (!id)
-    {throw new CanvasCommandError("user_not_found", "resolved user payload did not contain an id");}
+  if (!id) {
+    throw new CanvasCommandError("user_not_found", "resolved user payload did not contain an id");
+  }
   return id;
 }
 
@@ -3607,15 +3811,22 @@ function accessLevel(raw: string, allowInvitation: false): "read" | "write";
 function accessLevel(raw: string, allowInvitation: true): "read" | "write" | "invitation";
 function accessLevel(raw: string, allowInvitation: boolean): "read" | "write" | "invitation" {
   const val = raw.toLowerCase();
-  if (val === "viewer" || val === "view" || val === "read") {return "read";}
-  if (val === "editor" || val === "edit" || val === "write") {return "write";}
-  if (allowInvitation && (val === "invitation" || val === "private" || val === "restricted"))
-    {return "invitation";}
+  if (val === "viewer" || val === "view" || val === "read") {
+    return "read";
+  }
+  if (val === "editor" || val === "edit" || val === "write") {
+    return "write";
+  }
+  if (allowInvitation && (val === "invitation" || val === "private" || val === "restricted")) {
+    return "invitation";
+  }
   throw new Error(`Unknown access level: ${raw}`);
 }
 
 function countShareEntries(payload: unknown): number {
-  if (!isRecord(payload)) {return 0;}
+  if (!isRecord(payload)) {
+    return 0;
+  }
   const shares = isRecord(payload.shares) ? payload.shares : payload;
   let total = 0;
   const visit = (value: unknown): void => {
@@ -3623,8 +3834,12 @@ function countShareEntries(payload: unknown): number {
       total += value.length;
       return;
     }
-    if (!isRecord(value)) {return;}
-    for (const child of Object.values(value)) {visit(child);}
+    if (!isRecord(value)) {
+      return;
+    }
+    for (const child of Object.values(value)) {
+      visit(child);
+    }
   };
   visit(shares);
   return total;
@@ -3636,11 +3851,17 @@ async function mutationAlreadyRecorded(
   file?: CanvasFile,
 ): Promise<boolean> {
   const memory = mutationMemory.get(key);
-  if (memory && mutationEntryValid(memory, canvasId, file)) {return true;}
-  if (outputSink) {return false;}
+  if (memory && mutationEntryValid(memory, canvasId, file)) {
+    return true;
+  }
+  if (outputSink) {
+    return false;
+  }
   const entries = await readMutationEntries();
   const entry = entries[key];
-  if (!entry || !mutationEntryValid(entry, canvasId, file)) {return false;}
+  if (!entry || !mutationEntryValid(entry, canvasId, file)) {
+    return false;
+  }
   mutationMemory.set(key, entry);
   return true;
 }
@@ -3652,19 +3873,27 @@ async function recordMutation(key: string, canvasId: string, file?: CanvasFile):
     expires_at: Date.now() + IDEMPOTENCY_CACHE_TTL_MS,
   };
   for (const [entryKey, value] of mutationMemory.entries()) {
-    if (value.canvas_id === canvasId && entryKey !== key) {mutationMemory.delete(entryKey);}
+    if (value.canvas_id === canvasId && entryKey !== key) {
+      mutationMemory.delete(entryKey);
+    }
   }
   mutationMemory.set(key, entry);
-  if (outputSink) {return;}
+  if (outputSink) {
+    return;
+  }
   try {
     const entries = await readMutationEntries();
     const now = Date.now();
     for (const [entryKey, value] of Object.entries(entries)) {
-      if (value.canvas_id === canvasId && entryKey !== key) {delete entries[entryKey];}
+      if (value.canvas_id === canvasId && entryKey !== key) {
+        delete entries[entryKey];
+      }
     }
     entries[key] = entry;
     for (const [entryKey, value] of Object.entries(entries)) {
-      if (value.expires_at <= now) {delete entries[entryKey];}
+      if (value.expires_at <= now) {
+        delete entries[entryKey];
+      }
     }
     await mkdir(IDEMPOTENCY_CACHE_DIR, { recursive: true });
     await writeFile(
@@ -3689,9 +3918,13 @@ async function readMutationEntries(): Promise<Record<string, MutationEntry>> {
 }
 
 function mutationEntryValid(entry: MutationEntry, canvasId: string, file?: CanvasFile): boolean {
-  if (entry.canvas_id !== canvasId || entry.expires_at <= Date.now()) {return false;}
+  if (entry.canvas_id !== canvasId || entry.expires_at <= Date.now()) {
+    return false;
+  }
   const version = fileMutationVersion(file);
-  if (version != null && entry.file_updated !== version) {return false;}
+  if (version != null && entry.file_updated !== version) {
+    return false;
+  }
   return true;
 }
 
@@ -3703,8 +3936,11 @@ function fileMutationVersion(file?: CanvasFile): number | undefined {
 
 function writeOutput(payload: unknown, options: CanvasOutputOptions = {}): void {
   const text = serializeCanvasOutput(payload, { ...activeGlobals, ...options });
-  if (outputSink) {outputSink.push(text);}
-  else {process.stdout.write(text);}
+  if (outputSink) {
+    outputSink.push(text);
+  } else {
+    process.stdout.write(text);
+  }
 }
 
 function parseArgs(args: string[]): ParsedArgs {
@@ -3724,9 +3960,15 @@ function parseArgs(args: string[]): ParsedArgs {
     const eq = arg.indexOf("=");
     const key = eq > 0 ? arg.slice(0, eq) : arg;
     let val = eq > 0 ? arg.slice(eq + 1) : undefined;
-    if (val == null && args[i + 1] && !args[i + 1].startsWith("--")) {val = args[++i];}
-    if (val == null) {val = "true";}
-    if (key === "--format") {formatExplicit = true;}
+    if (val == null && args[i + 1] && !args[i + 1].startsWith("--")) {
+      val = args[++i];
+    }
+    if (val == null) {
+      val = "true";
+    }
+    if (key === "--format") {
+      formatExplicit = true;
+    }
     const list = flags.get(key) ?? [];
     list.push(val);
     flags.set(key, list);
@@ -3736,8 +3978,9 @@ function parseArgs(args: string[]): ParsedArgs {
 
 function globalsFrom(parsed: ParsedArgs): Globals {
   const format = value(parsed, "--format") as CanvasFormat | undefined;
-  if (format && format !== "json" && format !== "toon")
-    {throw new Error("--format must be json or toon");}
+  if (format && format !== "json" && format !== "toon") {
+    throw new Error("--format must be json or toon");
+  }
   const fields = value(parsed, "--fields")
     ?.split(",")
     .map((field) => field.trim())
@@ -3772,15 +4015,21 @@ function withStdinText(parsed: ParsedArgs, text: string): ParsedArgs {
 
 async function readTextArg(arg: string): Promise<string> {
   const injected = activeInjectedText();
-  if (arg === "-" && injected != null) {return injected;}
-  if (arg === "-") {return await readProcessStdin();}
+  if (arg === "-" && injected != null) {
+    return injected;
+  }
+  if (arg === "-") {
+    return await readProcessStdin();
+  }
   return await readFile(arg, "utf8");
 }
 
 async function readProcessStdin(): Promise<string> {
   let text = "";
   process.stdin.setEncoding("utf8");
-  for await (const chunk of process.stdin) {text += chunk;}
+  for await (const chunk of process.stdin) {
+    text += chunk;
+  }
   return text;
 }
 
@@ -3789,7 +4038,9 @@ function activeInjectedText(): string | undefined {
 }
 
 function targetFromArg(input: string): { canvasId: string; workspaceUrl?: string } {
-  if (isCanvasId(input)) {return { canvasId: input };}
+  if (isCanvasId(input)) {
+    return { canvasId: input };
+  }
   const ref = parseSlackCanvasRef(input);
   return { canvasId: ref.canvasId, workspaceUrl: ref.workspaceUrl };
 }
@@ -3816,7 +4067,9 @@ function value(parsed: ParsedArgs, flag: string): string | undefined {
 
 function requiredFlag(parsed: ParsedArgs, flag: string): string {
   const val = value(parsed, flag);
-  if (!val || val === "true") {throw new Error(`Missing ${flag}`);}
+  if (!val || val === "true") {
+    throw new Error(`Missing ${flag}`);
+  }
   return val;
 }
 
@@ -3827,13 +4080,17 @@ function bool(parsed: ParsedArgs, flag: string): boolean {
 
 function requiredPositional(parsed: ParsedArgs, index: number, label: string): string {
   const val = parsed.positionals[index];
-  if (!val) {throw new Error(`Missing ${label}`);}
+  if (!val) {
+    throw new Error(`Missing ${label}`);
+  }
   return val;
 }
 
 function clampInt(raw: string, min: number, max: number): number {
   const n = Number.parseInt(raw, 10);
-  if (!Number.isFinite(n)) {throw new Error(`Expected integer, got ${raw}`);}
+  if (!Number.isFinite(n)) {
+    throw new Error(`Expected integer, got ${raw}`);
+  }
   return Math.min(Math.max(n, min), max);
 }
 
@@ -3876,9 +4133,13 @@ function nthOccurrenceIndex(text: string, quote: string, occurrence: number): nu
   let offset = 0;
   for (;;) {
     const index = text.indexOf(quote, offset);
-    if (index < 0) {return -1;}
+    if (index < 0) {
+      return -1;
+    }
     count++;
-    if (count === occurrence) {return index;}
+    if (count === occurrence) {
+      return index;
+    }
     offset = index + quote.length;
   }
 }
@@ -3951,10 +4212,15 @@ function stripEmojiColons(input: string): string {
 
 export function __testParsePrivateMarkdownBlocks(markdown: string): Record<string, unknown>[] {
   return parsePrivateMarkdownBlocks(markdown).map((block) => {
-    if (block.kind === "list") {return { kind: block.kind, style: block.style, items: block.items };}
-    if (block.kind === "table") {return { kind: block.kind, rows: block.rows };}
-    if (block.kind === "embed")
-      {return { kind: block.kind, embed_type: block.embed_type, url: block.url, text: block.text };}
+    if (block.kind === "list") {
+      return { kind: block.kind, style: block.style, items: block.items };
+    }
+    if (block.kind === "table") {
+      return { kind: block.kind, rows: block.rows };
+    }
+    if (block.kind === "embed") {
+      return { kind: block.kind, embed_type: block.embed_type, url: block.url, text: block.text };
+    }
     return pruneEmpty({ kind: block.kind, type: block.type, style: block.style, text: block.text });
   });
 }
@@ -4001,16 +4267,29 @@ export function __testBuildEditDocumentBody(
 }
 
 function pruneEmpty<T>(value: T): T {
-  if (Array.isArray(value))
-    {return value.map((item) => pruneEmpty(item)).filter((item) => item !== undefined) as T;}
-  if (!value || typeof value !== "object") {return value;}
+  if (Array.isArray(value)) {
+    return value.map((item) => pruneEmpty(item)).filter((item) => item !== undefined) as T;
+  }
+  if (!value || typeof value !== "object") {
+    return value;
+  }
   const out: Record<string, unknown> = {};
   for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
     const next = pruneEmpty(child);
-    if (next === undefined || next === null) {continue;}
-    if (Array.isArray(next) && next.length === 0) {continue;}
-    if (next && typeof next === "object" && !Array.isArray(next) && Object.keys(next).length === 0)
-      {continue;}
+    if (next === undefined || next === null) {
+      continue;
+    }
+    if (Array.isArray(next) && next.length === 0) {
+      continue;
+    }
+    if (
+      next &&
+      typeof next === "object" &&
+      !Array.isArray(next) &&
+      Object.keys(next).length === 0
+    ) {
+      continue;
+    }
     out[key] = next;
   }
   return out as T;

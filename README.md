@@ -215,8 +215,6 @@ After sending, the editor shows a "View in Slack" link to the posted message.
 agent-slack message send "https://workspace.slack.com/archives/C123/p1700000000000000" "I can take this."
 agent-slack message send "#alerts-staging" "here's the report" --attach ./report.md
 agent-slack message edit "https://workspace.slack.com/archives/C123/p1700000000000000" "I can take this today."
-agent-slack message edit "https://workspace.slack.com/archives/C123/p1700000000000000" "See <https://example.com|details>."
-agent-slack message edit "https://workspace.slack.com/archives/C123/p1700000000000000" "fallback text" --blocks ./blocks.json
 agent-slack message delete "https://workspace.slack.com/archives/C123/p1700000000000000"
 agent-slack message react add "https://workspace.slack.com/archives/C123/p1700000000000000" "eyes"
 agent-slack message react remove "https://workspace.slack.com/archives/C123/p1700000000000000" "eyes"

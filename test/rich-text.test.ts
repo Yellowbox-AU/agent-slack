@@ -51,7 +51,7 @@ describe("parseInlineElements", () => {
   test("non-url angle bracket text is preserved as text", () => {
     expect(parseInlineElements("Use <fix>")).toEqual([
       { type: "text", text: "Use " },
-      { type: "text", text: "fix" },
+      { type: "text", text: "<fix>" },
     ]);
   });
 });
@@ -67,6 +67,24 @@ describe("textToRichTextBlocks", () => {
 
   test("non-url angle bracket text does not trigger rich text blocks", () => {
     expect(textToRichTextBlocks("Use <fix>", { includeInlineFormatting: true })).toBeNull();
+  });
+
+  test("mixed non-url angle bracket text and formatting preserves brackets", () => {
+    const result = textToRichTextBlocks("Use <fix> and *bold*", {
+      includeInlineFormatting: true,
+    })!;
+    expect(result[0]!.elements).toEqual([
+      {
+        type: "rich_text_section",
+        elements: [
+          { type: "text", text: "Use " },
+          { type: "text", text: "<fix>" },
+          { type: "text", text: " and " },
+          { type: "text", text: "bold", style: { bold: true } },
+          { type: "text", text: "\n" },
+        ],
+      },
+    ]);
   });
 
   test("inline-only formatting can produce rich text blocks", () => {

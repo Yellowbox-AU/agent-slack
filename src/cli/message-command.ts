@@ -109,10 +109,7 @@ export function registerMessageCommand(input: { program: Command; ctx: CliContex
       "Workspace selector (full URL or unique substring; needed when using #channel/channel id across multiple workspaces)",
     )
     .option("--ts <ts>", "Message ts (required when using #channel/channel id)")
-    .option(
-      "--blocks <path>",
-      "Path to a JSON file containing a Block Kit blocks array. The positional text remains Slack fallback text. Use '-' to read from stdin.",
-    )
+    .option("--blocks <path>", "Read Block Kit blocks JSON from file or '-'")
     .action(async (...args) => {
       const [targetInput, text, options] = args as [
         string,

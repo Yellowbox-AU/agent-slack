@@ -93,7 +93,7 @@ export function parseInlineElements(text: string): InlineElement[] {
     } else if (bareUrl != null && /^https?:\/\//i.test(bareUrl)) {
       elements.push({ type: "link", url: bareUrl });
     } else if (bareUrl != null) {
-      elements.push({ type: "text", text: bareUrl });
+      elements.push({ type: "text", text: `<${bareUrl}>` });
     } else if (bareUserId != null) {
       elements.push({ type: "user", user_id: bareUserId });
     } else if (bareBroadcast != null) {

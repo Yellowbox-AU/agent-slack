@@ -141,8 +141,6 @@ agent-slack message draft "https://workspace.slack.com/archives/C123/p1700000000
 agent-slack message send "https://workspace.slack.com/archives/C123/p1700000000000000" "I can take this."
 agent-slack message send "alerts-staging" "here's the report" --attach ./report.md
 agent-slack message edit "https://workspace.slack.com/archives/C123/p1700000000000000" "I can take this today."
-agent-slack message edit "https://workspace.slack.com/archives/C123/p1700000000000000" "See <https://example.com|details>."
-agent-slack message edit "https://workspace.slack.com/archives/C123/p1700000000000000" "fallback text" --blocks ./blocks.json
 agent-slack message delete "https://workspace.slack.com/archives/C123/p1700000000000000"
 
 agent-slack message send "general" "Here's the plan:
@@ -153,8 +151,6 @@ agent-slack message react add "https://workspace.slack.com/archives/C123/p170000
 agent-slack message react remove "https://workspace.slack.com/archives/C123/p1700000000000000" "eyes"
 ```
 
-Edits containing supported mrkdwn such as `<https://example.com|links>`, `*bold*`, `_italic_`, `~strike~`, and inline code are sent with Slack rich-text blocks so formatting is preserved by `chat.update`. Plain text edits stay text-only.
-
 Channel mode for edit/delete requires `--ts`:
 
 ```bash
@@ -162,11 +158,7 @@ agent-slack message edit "general" "Updated text" --workspace "myteam" --ts "177
 agent-slack message delete "general" --workspace "myteam" --ts "1770165109.628379"
 ```
 
-Structured message options:
-
-- `--attach <path>` upload a local file with `message send` (repeatable)
-- `--blocks <path>` send raw [Block Kit](https://docs.slack.dev/block-kit/) blocks from a JSON file (or `-` for stdin). Enables headers, dividers, table blocks, and other structured layouts. Incompatible with `--attach`.
-- `message edit` also accepts `--blocks <path>` to update a message with raw Block Kit blocks. The positional text remains Slack fallback text.
+Message options: `message send --attach <path>` uploads files; `message send|edit --blocks <path>` uses raw Block Kit JSON (`-` for stdin).
 
 `message send` returns `channel_id` plus the posted `ts` and a `permalink` (for non-attachment sends). `thread_ts` appears only when replying in a thread.
 
