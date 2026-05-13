@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { CliContext } from "../src/cli/context.ts";
-import { sendMessage } from "../src/cli/message-actions.ts";
+import { editMessage, sendMessage } from "../src/cli/message-actions.ts";
 
 function createContext(calls: { method: string; params: Record<string, unknown> }[]) {
   const client = {
@@ -347,6 +347,139 @@ describe("sendMessage", () => {
           options: { blocks: blocksPath },
         }),
       ).rejects.toThrow(/element at index 1 is not a Block Kit block object/);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("editMessage", () => {
+  test("edits a normal message without blocks when no --blocks file is passed", async () => {
+    const calls: { method: string; params: Record<string, unknown> }[] = [];
+    const ctx = createContext(calls);
+
+    const result = await editMessage({
+      ctx,
+      targetInput: "C12345678",
+      text: "hello",
+      options: { workspace: "https://workspace.slack.com", ts: "1770165109.628379" },
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.method).toBe("chat.update");
+    expect(calls[0]?.params).toEqual({
+      channel: "C12345678",
+      ts: "1770165109.628379",
+      text: "hello",
+    });
+  });
+
+  test("edits a message URL with Block Kit JSON from file", async () => {
+    const calls: { method: string; params: Record<string, unknown> }[] = [];
+    const ctx = createContext(calls);
+    const dir = await mkdtemp(join(tmpdir(), "agent-slack-edit-test-"));
+    const blocksPath = join(dir, "blocks.json");
+    const blocks = [
+      { type: "header", text: { type: "plain_text", text: "Edited" } },
+      { type: "section", text: { type: "mrkdwn", text: "Updated body" } },
+    ];
+    await writeFile(blocksPath, JSON.stringify(blocks));
+
+    try {
+      await editMessage({
+        ctx,
+        targetInput: "https://workspace.slack.com/archives/C12345678/p1770165109628379",
+        text: "fallback text",
+        options: { blocks: blocksPath },
+      });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.method).toBe("chat.update");
+    expect(calls[0]?.params).toEqual({
+      channel: "C12345678",
+      ts: "1770165109.628379",
+      text: "fallback text",
+      blocks,
+    });
+  });
+
+  test("edits a channel target with --ts and Block Kit JSON from file", async () => {
+    const calls: { method: string; params: Record<string, unknown> }[] = [];
+    const ctx = createContext(calls);
+    const dir = await mkdtemp(join(tmpdir(), "agent-slack-edit-test-"));
+    const blocksPath = join(dir, "blocks.json");
+    const blocks = [{ type: "divider" }];
+    await writeFile(blocksPath, JSON.stringify(blocks));
+
+    try {
+      await editMessage({
+        ctx,
+        targetInput: "C12345678",
+        text: "fallback text",
+        options: {
+          workspace: "https://workspace.slack.com",
+          ts: "1770165109.628379",
+          blocks: blocksPath,
+        },
+      });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.method).toBe("chat.update");
+    expect(calls[0]?.params.blocks).toEqual(blocks);
+  });
+
+  test("edit --blocks errors when JSON is not an array", async () => {
+    const calls: { method: string; params: Record<string, unknown> }[] = [];
+    const ctx = createContext(calls);
+    const dir = await mkdtemp(join(tmpdir(), "agent-slack-edit-test-"));
+    const blocksPath = join(dir, "blocks.json");
+    await writeFile(blocksPath, JSON.stringify({ type: "header" }));
+
+    try {
+      await expect(
+        editMessage({
+          ctx,
+          targetInput: "C12345678",
+          text: "fallback text",
+          options: {
+            workspace: "https://workspace.slack.com",
+            ts: "1770165109.628379",
+            blocks: blocksPath,
+          },
+        }),
+      ).rejects.toThrow(/expected a JSON array/);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("edit --blocks errors on malformed JSON", async () => {
+    const calls: { method: string; params: Record<string, unknown> }[] = [];
+    const ctx = createContext(calls);
+    const dir = await mkdtemp(join(tmpdir(), "agent-slack-edit-test-"));
+    const blocksPath = join(dir, "blocks.json");
+    await writeFile(blocksPath, "{not valid json");
+
+    try {
+      await expect(
+        editMessage({
+          ctx,
+          targetInput: "C12345678",
+          text: "fallback text",
+          options: {
+            workspace: "https://workspace.slack.com",
+            ts: "1770165109.628379",
+            blocks: blocksPath,
+          },
+        }),
+      ).rejects.toThrow(/failed to parse JSON/);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
