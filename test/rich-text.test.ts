@@ -47,11 +47,43 @@ describe("parseInlineElements", () => {
       { type: "link", url: "https://example.com" },
     ]);
   });
+
+  test("non-url angle bracket text is preserved as text", () => {
+    expect(parseInlineElements("Use <fix>")).toEqual([
+      { type: "text", text: "Use " },
+      { type: "text", text: "fix" },
+    ]);
+  });
 });
 
 describe("textToRichTextBlocks", () => {
   test("plain text returns null", () => {
     expect(textToRichTextBlocks("Hello world")).toBeNull();
+  });
+
+  test("inline-only formatting returns null by default", () => {
+    expect(textToRichTextBlocks("Visit <https://example.com|Example>")).toBeNull();
+  });
+
+  test("non-url angle bracket text does not trigger rich text blocks", () => {
+    expect(textToRichTextBlocks("Use <fix>", { includeInlineFormatting: true })).toBeNull();
+  });
+
+  test("inline-only formatting can produce rich text blocks", () => {
+    const result = textToRichTextBlocks("Visit <https://example.com|Example>", {
+      includeInlineFormatting: true,
+    })!;
+    expect(result).not.toBeNull();
+    expect(result[0]!.elements).toEqual([
+      {
+        type: "rich_text_section",
+        elements: [
+          { type: "text", text: "Visit " },
+          { type: "link", url: "https://example.com", text: "Example" },
+          { type: "text", text: "\n" },
+        ],
+      },
+    ]);
   });
 
   test("bullet list with - prefix", () => {

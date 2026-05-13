@@ -141,6 +141,7 @@ agent-slack message draft "https://workspace.slack.com/archives/C123/p1700000000
 agent-slack message send "https://workspace.slack.com/archives/C123/p1700000000000000" "I can take this."
 agent-slack message send "alerts-staging" "here's the report" --attach ./report.md
 agent-slack message edit "https://workspace.slack.com/archives/C123/p1700000000000000" "I can take this today."
+agent-slack message edit "https://workspace.slack.com/archives/C123/p1700000000000000" "See <https://example.com|details>."
 agent-slack message edit "https://workspace.slack.com/archives/C123/p1700000000000000" "fallback text" --blocks ./blocks.json
 agent-slack message delete "https://workspace.slack.com/archives/C123/p1700000000000000"
 
@@ -151,6 +152,8 @@ agent-slack message send "general" "Here's the plan:
 agent-slack message react add "https://workspace.slack.com/archives/C123/p1700000000000000" "eyes"
 agent-slack message react remove "https://workspace.slack.com/archives/C123/p1700000000000000" "eyes"
 ```
+
+Edits containing supported mrkdwn such as `<https://example.com|links>`, `*bold*`, `_italic_`, `~strike~`, and inline code are sent with Slack rich-text blocks so formatting is preserved by `chat.update`. Plain text edits stay text-only.
 
 Channel mode for edit/delete requires `--ts`:
 
