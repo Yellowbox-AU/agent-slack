@@ -13,9 +13,7 @@ export type CanvasIdempotencyInput = {
 };
 
 export function deriveCanvasIdempotencyKey(input: CanvasIdempotencyInput): string {
-  if (input.explicit?.trim()) {
-    return input.explicit.trim();
-  }
+  if (input.explicit?.trim()) {return input.explicit.trim();}
   const natural = {
     workspace: normalize(input.workspace),
     command: input.command.trim().toLowerCase(),
@@ -38,9 +36,7 @@ function normalizeMultiline(value?: string): string {
 }
 
 function stableJson(value: unknown): string {
-  if (Array.isArray(value)) {
-    return `[${value.map(stableJson).join(",")}]`;
-  }
+  if (Array.isArray(value)) {return `[${value.map(stableJson).join(",")}]`;}
   if (value && typeof value === "object") {
     const entries = Object.entries(value as Record<string, unknown>)
       .filter(([, child]) => child !== undefined)

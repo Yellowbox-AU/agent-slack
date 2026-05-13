@@ -84,9 +84,7 @@ export function isCanvasId(value: string): boolean {
 
 export function parseSlackCanvasRef(input: string): CanvasRef {
   const trimmed = input.trim();
-  if (isCanvasId(trimmed)) {
-    return { canvasId: trimmed, raw: input };
-  }
+  if (isCanvasId(trimmed)) {return { canvasId: trimmed, raw: input };}
 
   let url: URL;
   try {
@@ -153,9 +151,7 @@ export function buildCanvasChange(input: {
     throw new Error(`Invalid section id: ${sectionId}`);
   }
   const change: CanvasChange = { operation };
-  if (sectionId) {
-    change.section_id = sectionId;
-  }
+  if (sectionId) {change.section_id = sectionId;}
   if (markdown != null) {
     change.document_content = { type: "markdown", markdown };
   }
@@ -167,17 +163,13 @@ export function buildRenameChange(title: string): {
   title_content: { type: "markdown"; markdown: string };
 } {
   const markdown = title.trim();
-  if (!markdown) {
-    throw new Error("Canvas title cannot be empty");
-  }
+  if (!markdown) {throw new Error("Canvas title cannot be empty");}
   return { operation: "rename", title_content: { type: "markdown", markdown } };
 }
 
 export function parsePositiveInt(value: string, label: string): number {
   const n = Number.parseInt(value, 10);
-  if (!Number.isFinite(n) || n < 1) {
-    throw new Error(`${label} must be a positive integer`);
-  }
+  if (!Number.isFinite(n) || n < 1) {throw new Error(`${label} must be a positive integer`);}
   return n;
 }
 
@@ -212,9 +204,7 @@ export function extractCanvasResources(html: string): CanvasResource[] {
   for (const match of html.matchAll(/<img\b([^>]*)>/gi)) {
     const attrs = match[1] ?? "";
     const src = attrValue(attrs, "src");
-    if (!src) {
-      continue;
-    }
+    if (!src) {continue;}
     pushResource(out, seen, {
       type: classifyResource(src, true),
       url: decodeHtmlEntities(src),
@@ -224,9 +214,7 @@ export function extractCanvasResources(html: string): CanvasResource[] {
   for (const match of html.matchAll(/<a\b([^>]*)>(.*?)<\/a>/gis)) {
     const attrs = match[1] ?? "";
     const href = attrValue(attrs, "href");
-    if (!href) {
-      continue;
-    }
+    if (!href) {continue;}
     pushResource(out, seen, {
       type: classifyResource(href, false),
       url: decodeHtmlEntities(href),
@@ -242,9 +230,7 @@ export function extractCanvasSections(html: string): CanvasSection[] {
     const type = match[1].toLowerCase();
     const attrs = match[2] ?? "";
     const id = attrValue(attrs, "id");
-    if (!id) {
-      continue;
-    }
+    if (!id) {continue;}
     const text = stripHtml(match[3] ?? "")
       .replace(/\s+/g, " ")
       .trim();
@@ -254,13 +240,9 @@ export function extractCanvasSections(html: string): CanvasSection[] {
 }
 
 export function hydrateCanvasHtmlControls(html: string, strings: string[]): string {
-  if (!html.includes("<control") || strings.length === 0) {
-    return html;
-  }
+  if (!html.includes("<control") || strings.length === 0) {return html;}
   const labels = controlLabelsFromCanvasStrings([html, ...strings]);
-  if (labels.size === 0) {
-    return html;
-  }
+  if (labels.size === 0) {return html;}
   return html.replace(/<control\b([^>]*)><\/control>/gi, (match, attrs) => {
     const id = attrValue(attrs ?? "", "id");
     const label = id ? labels.get(id) : undefined;
@@ -276,33 +258,26 @@ export function canvasHtmlToMarkdown(html: string): string {
     const tag = match[1]?.toLowerCase();
     const attrs = match[2] ?? "";
     const body = match[3] ?? "";
-    if (!tag) {
-      continue;
-    }
+    if (!tag) {continue;}
     if (/^h[1-6]$/.test(tag)) {
       const text = markdownTextFromHtml(body).replace(/\s+/g, " ").trim();
-      if (text) {
-        blocks.push(`${"#".repeat(Number(tag.slice(1)))} ${text}`);
-      }
+      if (text) {blocks.push(`${"#".repeat(Number(tag.slice(1)))} ${text}`);}
       continue;
     }
     if (tag === "blockquote") {
       const text = markdownTextFromHtml(body).replace(/\s+/g, " ").trim();
-      if (text) {
-        blocks.push(
+      if (text)
+        {blocks.push(
           text
             .split(/\n+/)
             .map((line) => `> ${line}`)
             .join("\n"),
-        );
-      }
+        );}
       continue;
     }
     if (tag === "pre") {
       const text = stripHtml(body).trim();
-      if (text) {
-        blocks.push(["```", text, "```"].join("\n"));
-      }
+      if (text) {blocks.push(["```", text, "```"].join("\n"));}
       continue;
     }
     if (tag === "p" && /\bprettyprint\b/i.test(attrs)) {
@@ -338,15 +313,11 @@ export function canvasHtmlToMarkdown(html: string): string {
     }
     if (tag === "table") {
       const table = htmlTableToMarkdown(body);
-      if (table) {
-        blocks.push(table);
-      }
+      if (table) {blocks.push(table);}
       continue;
     }
     const text = markdownTextFromHtml(body).replace(/\s+/g, " ").trim();
-    if (text) {
-      blocks.push(text);
-    }
+    if (text) {blocks.push(text);}
   }
   return blocks.join("\n\n");
 }
@@ -361,9 +332,7 @@ export function inspectCanvasMarkdown(markdown: string): CanvasMarkdownInspectio
   const addFeature = (feature: string) => features.add(feature);
   const addIssue = (line: number, code: string, feature: string, message: string) => {
     addFeature(feature);
-    if (issues.some((issue) => issue.line === line && issue.code === code)) {
-      return;
-    }
+    if (issues.some((issue) => issue.line === line && issue.code === code)) {return;}
     issues.push({ line, code, feature, message });
   };
 
@@ -373,17 +342,15 @@ export function inspectCanvasMarkdown(markdown: string): CanvasMarkdownInspectio
     const trimmed = line.trim();
 
     if (inFence) {
-      if (trimmed.startsWith("```")) {
+      if (trimmed.startsWith('```')) {
         inFence = false;
       }
       continue;
     }
 
-    if (!trimmed) {
-      continue;
-    }
+    if (!trimmed) {continue;}
 
-    if (trimmed.startsWith("```")) {
+    if (trimmed.startsWith('```')) {
       inFence = true;
       fenceStart = lineNumber;
       addFeature("code_block");
@@ -466,9 +433,8 @@ export function inspectCanvasMarkdown(markdown: string): CanvasMarkdownInspectio
     }
   }
 
-  if (inFence) {
-    addIssue(fenceStart, "code_block_unclosed", "code_block", "Code block is not closed.");
-  }
+  if (inFence)
+    {addIssue(fenceStart, "code_block_unclosed", "code_block", "Code block is not closed.");}
   return { features: [...features].sort(), issues };
 }
 
@@ -478,20 +444,15 @@ export function validatePrivateCanvasMarkdown(
 ): CanvasMarkdownInspection & { ok: boolean } {
   const inspection = inspectCanvasMarkdown(markdown);
   const issues = [...inspection.issues];
-  if (operation === "replace") {
-    inspection.features.push("whole_canvas_replace");
-  }
-  if (operation === "insert_after" || operation === "insert_before") {
-    inspection.features.push("section_edit");
-  }
+  if (operation === "replace") {inspection.features.push("whole_canvas_replace");}
+  if (operation === "insert_after" || operation === "insert_before")
+    {inspection.features.push("section_edit");}
   return { features: inspection.features, issues, ok: issues.length === 0 };
 }
 
 export function buildAttachmentMarkdown(url: string, alt?: string): string {
   const trimmed = url.trim();
-  if (!trimmed) {
-    throw new Error("Attachment URL cannot be empty");
-  }
+  if (!trimmed) {throw new Error("Attachment URL cannot be empty");}
   const label = (alt || basenameFromUrl(trimmed) || "attachment").replaceAll("]", "\\]");
   if (/\.(png|jpe?g|gif|webp|svg)(\?|#|$)/i.test(trimmed)) {
     return `![${label}](${trimmed})`;
@@ -501,44 +462,32 @@ export function buildAttachmentMarkdown(url: string, alt?: string): string {
 
 function pushUnique(out: SpecialInsertion[], seen: Set<string>, item: SpecialInsertion): void {
   const key = `${item.type}\0${item.text}\0${item.value ?? ""}`;
-  if (seen.has(key)) {
-    return;
-  }
+  if (seen.has(key)) {return;}
   seen.add(key);
   out.push(item);
 }
 
 function pushResource(out: CanvasResource[], seen: Set<string>, item: CanvasResource): void {
   const key = `${item.type}\0${item.url}`;
-  if (seen.has(key)) {
-    return;
-  }
+  if (seen.has(key)) {return;}
   seen.add(key);
   out.push(item);
 }
 
 function classifyResource(url: string, image: boolean): CanvasResource["type"] {
-  if (image) {
-    return "image";
-  }
-  if (/\/docs\/[^/]+\/F[A-Z0-9]{8,}/.test(url) || /\/docs\/F[A-Z0-9]{8,}/.test(url)) {
-    return "slack_canvas";
-  }
-  if (/\/archives\/[CGD][A-Z0-9]+\/p\d+/.test(url)) {
-    return "slack_message";
-  }
-  if (/\/files\/[UW][A-Z0-9]+\/F[A-Z0-9]+/.test(url) || /files-pri\/[^/]+-F[A-Z0-9]+/.test(url)) {
-    return "slack_file";
-  }
+  if (image) {return "image";}
+  if (/\/docs\/[^/]+\/F[A-Z0-9]{8,}/.test(url) || /\/docs\/F[A-Z0-9]{8,}/.test(url))
+    {return "slack_canvas";}
+  if (/\/archives\/[CGD][A-Z0-9]+\/p\d+/.test(url)) {return "slack_message";}
+  if (/\/files\/[UW][A-Z0-9]+\/F[A-Z0-9]+/.test(url) || /files-pri\/[^/]+-F[A-Z0-9]+/.test(url))
+    {return "slack_file";}
   return "link";
 }
 
 function attrValue(attrs: string, name: string): string | null {
   const re = new RegExp(`\\b${escapeRegExp(name)}\\s*=\\s*("([^"]*)"|'([^']*)'|([^\\s>]+))`, "i");
   const match = attrs.match(re);
-  if (!match) {
-    return null;
-  }
+  if (!match) {return null;}
   return decodeHtmlEntities(match[2] ?? match[3] ?? match[4] ?? "");
 }
 
@@ -549,31 +498,23 @@ function controlLabelsFromCanvasStrings(strings: string[]): Map<string, string> 
       /<control\b[^>]*\bid=(?:"([^"]+)"|'([^']*)'|([^\s>]+))[^>]*><\/control>/gi,
     )) {
       const id = decodeHtmlEntities(match[1] ?? match[2] ?? match[3] ?? "");
-      if (id) {
-        ids.add(id);
-      }
+      if (id) {ids.add(id);}
     }
   }
   const labels = new Map<string, string>();
   for (const id of ids) {
     const label = controlLabelForId(strings, id);
-    if (label) {
-      labels.set(id, label);
-    }
+    if (label) {labels.set(id, label);}
   }
   return labels;
 }
 
 function controlLabelForId(strings: string[], id: string): string | undefined {
   for (let i = 0; i < strings.length; i++) {
-    if (strings[i] !== id) {
-      continue;
-    }
+    if (strings[i] !== id) {continue;}
     for (let j = i + 1; j < Math.min(strings.length, i + 12); j++) {
       const label = normalizeControlLabel(strings[j]);
-      if (label) {
-        return label;
-      }
+      if (label) {return label;}
     }
   }
   return undefined;
@@ -581,35 +522,23 @@ function controlLabelForId(strings: string[], id: string): string | undefined {
 
 function normalizeControlLabel(value: string): string | undefined {
   const trimmed = value.trim();
-  if (!trimmed) {
-    return undefined;
-  }
+  if (!trimmed) {return undefined;}
   const user = trimmed.match(/^su:((?:U|W)[A-Z0-9]{8,})$/);
-  if (user) {
-    return `@${user[1]}`;
-  }
+  if (user) {return `@${user[1]}`;}
   const channel = trimmed.match(/^sc:([CDG][A-Z0-9]{8,})$/);
-  if (channel) {
-    return `<#${channel[1]}>`;
-  }
+  if (channel) {return `<#${channel[1]}>`;}
   const file = trimmed.match(/^sf:(F[A-Z0-9]{8,})$/);
-  if (file) {
-    return `slack-file://${file[1]}`;
-  }
+  if (file) {return `slack-file://${file[1]}`;}
   const canvas = trimmed.match(/^sd:(F[A-Z0-9]{8,})$/);
-  if (canvas) {
-    return canvas[1];
-  }
-  if (isInternalCanvasString(trimmed)) {
-    return undefined;
-  }
+  if (canvas) {return canvas[1];}
+  if (isInternalCanvasString(trimmed)) {return undefined;}
   return trimmed;
 }
 
 function isInternalCanvasString(value: string): boolean {
   return (
     /^temp:C:[A-Za-z0-9]+$/.test(value) ||
-    value.startsWith("agent-slack-") ||
+    value.startsWith('agent-slack-') ||
     /^(?:a[a-z]{1,7}|z[a-z]{1,7}|[a-z]+-orphaned-m)$/.test(value) ||
     /^(?:U|W|T)[A-Z0-9]{8,}$/.test(value) ||
     /^(?:CaW|BdO)[A-Za-z0-9]{6,}$/.test(value) ||
@@ -698,9 +627,7 @@ function htmlTableToMarkdown(input: string): string {
       ),
     )
     .filter((row) => row.length > 0);
-  if (!rows.length) {
-    return "";
-  }
+  if (!rows.length) {return "";}
   const width = Math.max(...rows.map((row) => row.length));
   const normalized = rows.map((row) => [
     ...row,

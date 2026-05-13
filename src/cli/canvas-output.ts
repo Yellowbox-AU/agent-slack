@@ -78,22 +78,16 @@ function preparePayload(payload: unknown, options: CanvasOutputOptions): unknown
 }
 
 function selectFields(payload: unknown, fields: string[]): unknown {
-  if (!isRecord(payload)) {
-    return payload;
-  }
+  if (!isRecord(payload)) {return payload;}
   const out: Record<string, unknown> = {};
   for (const field of fields) {
     const path = field
       .split(".")
       .map((part) => part.trim())
       .filter(Boolean);
-    if (path.length === 0) {
-      continue;
-    }
+    if (path.length === 0) {continue;}
     const value = getPath(payload, path);
-    if (value !== undefined) {
-      setPath(out, path, value);
-    }
+    if (value !== undefined) {setPath(out, path, value);}
   }
   return out;
 }
@@ -101,9 +95,7 @@ function selectFields(payload: unknown, fields: string[]): unknown {
 function getPath(value: unknown, path: string[]): unknown {
   let cursor = value;
   for (const part of path) {
-    if (!isRecord(cursor) || !(part in cursor)) {
-      return undefined;
-    }
+    if (!isRecord(cursor) || !(part in cursor)) {return undefined;}
     cursor = cursor[part];
   }
   return cursor;
@@ -113,51 +105,36 @@ function setPath(target: Record<string, unknown>, path: string[], value: unknown
   let cursor = target;
   for (let i = 0; i < path.length - 1; i++) {
     const key = path[i];
-    if (!isRecord(cursor[key])) {
-      cursor[key] = {};
-    }
+    if (!isRecord(cursor[key])) {cursor[key] = {};}
     cursor = cursor[key] as Record<string, unknown>;
   }
   cursor[path.at(-1)] = value;
 }
 
 function truncateStrings(value: unknown, maxChars: number): unknown {
-  if (typeof value === "string") {
-    return value.length > maxChars ? `${value.slice(0, maxChars)}...` : value;
-  }
-  if (Array.isArray(value)) {
-    return value.map((item) => truncateStrings(item, maxChars));
-  }
-  if (!isRecord(value)) {
-    return value;
-  }
+  if (typeof value === "string")
+    {return value.length > maxChars ? `${value.slice(0, maxChars)}...` : value;}
+  if (Array.isArray(value)) {return value.map((item) => truncateStrings(item, maxChars));}
+  if (!isRecord(value)) {return value;}
   const out: Record<string, unknown> = {};
-  for (const [key, child] of Object.entries(value)) {
-    out[key] = truncateStrings(child, maxChars);
-  }
+  for (const [key, child] of Object.entries(value)) {out[key] = truncateStrings(child, maxChars);}
   return out;
 }
 
 function toonValue(value: unknown, indent: number, key?: string): string {
   const pad = "  ".repeat(indent);
   const prefix = key == null ? "" : `${pad}${key}: `;
-  if (value == null || typeof value === "number" || typeof value === "boolean") {
-    return `${prefix}${String(value)}\n`;
-  }
-  if (typeof value === "string") {
-    return `${prefix}${quoteToonScalar(value)}\n`;
-  }
+  if (value == null || typeof value === "number" || typeof value === "boolean")
+    {return `${prefix}${String(value)}\n`;}
+  if (typeof value === "string") {return `${prefix}${quoteToonScalar(value)}\n`;}
   if (Array.isArray(value)) {
-    if (value.length === 0) {
-      return `${prefix}[]\n`;
-    }
+    if (value.length === 0) {return `${prefix}[]\n`;}
     let out = key == null ? "" : `${pad}${key}[${value.length}]:\n`;
     for (const item of value) {
       if (isRecord(item)) {
         out += `${pad}-\n`;
-        for (const [childKey, childValue] of Object.entries(item)) {
-          out += toonValue(childValue, indent + 1, childKey);
-        }
+        for (const [childKey, childValue] of Object.entries(item))
+          {out += toonValue(childValue, indent + 1, childKey);}
       } else {
         out += `${pad}- ${scalarLine(item)}\n`;
       }
@@ -166,28 +143,22 @@ function toonValue(value: unknown, indent: number, key?: string): string {
   }
   if (isRecord(value)) {
     let out = key == null ? "" : `${pad}${key}:\n`;
-    for (const [childKey, childValue] of Object.entries(value)) {
-      out += toonValue(childValue, key == null ? indent : indent + 1, childKey);
-    }
+    for (const [childKey, childValue] of Object.entries(value))
+      {out += toonValue(childValue, key == null ? indent : indent + 1, childKey);}
     return out;
   }
   return `${prefix}${quoteToonScalar(String(value))}\n`;
 }
 
 function scalarLine(value: unknown): string {
-  if (value == null || typeof value === "number" || typeof value === "boolean") {
-    return String(value);
-  }
+  if (value == null || typeof value === "number" || typeof value === "boolean")
+    {return String(value);}
   return quoteToonScalar(String(value));
 }
 
 function quoteToonScalar(value: string): string {
-  if (value === "") {
-    return '""';
-  }
-  if (/[\n\r:#,[\]{}]|^\s|\s$/.test(value)) {
-    return JSON.stringify(value);
-  }
+  if (value === "") {return '""';}
+  if (/[\n\r:#,[\]{}]|^\s|\s$/.test(value)) {return JSON.stringify(value);}
   return value;
 }
 
