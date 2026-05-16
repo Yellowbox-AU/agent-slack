@@ -164,7 +164,12 @@ export function registerMessageCommand(input: { program: Command; ctx: CliContex
       "Workspace selector (full URL or unique substring; needed when using #channel/channel id across multiple workspaces)",
     )
     .option("--thread-ts <ts>", "Thread root ts to post into (optional)")
-    .option("--attach <path>", "Attach a local file path (repeatable)", collectOptionValue, [])
+    .option(
+      "--attach <path-or-file-id>",
+      "Attach a local file path or existing Slack file/canvas ID (repeatable)",
+      collectOptionValue,
+      [],
+    )
     .option(
       "--blocks <path>",
       "Path to a JSON file containing a Block Kit blocks array. Bypasses automatic markdown-to-rich-text conversion. Use '-' to read from stdin. Cannot be combined with --attach.",

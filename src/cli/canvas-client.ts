@@ -41,6 +41,7 @@ export type CanvasFile = {
   id: string;
   title?: string;
   name?: string;
+  permalink?: string;
   created?: number;
   updated?: number;
   user?: string;
@@ -73,8 +74,9 @@ const controllerSessions = new Map<
 
 export async function loadCanvasCredentials(): Promise<CanvasCredentials> {
   let raw: Record<string, unknown> = { version: 1, workspaces: [] };
-  if (existsSync(CREDENTIALS_FILE))
-    {raw = JSON.parse(await readFile(CREDENTIALS_FILE, "utf8")) as Record<string, unknown>;}
+  if (existsSync(CREDENTIALS_FILE)) {
+    raw = JSON.parse(await readFile(CREDENTIALS_FILE, "utf8")) as Record<string, unknown>;
+  }
   const rawWorkspaces = Array.isArray(raw.workspaces) ? raw.workspaces : [];
   const workspaces = rawWorkspaces
     .map(hydrateWorkspace)
@@ -93,26 +95,30 @@ export async function resolveCanvasWorkspace(selector?: string): Promise<CanvasW
   const envCookie = (process.env.SLACK_XOXD_COOKIE ?? process.env.SLACK_COOKIE_D)?.trim();
   const envWorkspace = selector ?? process.env.SLACK_WORKSPACE_URL ?? creds.default_workspace_url;
   if (envToken || envCookie) {
-    if (!envToken?.startsWith("xoxc-"))
-      {throw new Error("Browser Canvas auth requires a Slack web xoxc token");}
-    if (!envCookie)
-      {throw new Error(
+    if (!envToken?.startsWith("xoxc-")) {
+      throw new Error("Browser Canvas auth requires a Slack web xoxc token");
+    }
+    if (!envCookie) {
+      throw new Error(
         "Browser Canvas auth requires Slack's d cookie in SLACK_COOKIE_D or SLACK_XOXD_COOKIE",
-      );}
-    if (!envWorkspace)
-      {throw new Error(
+      );
+    }
+    if (!envWorkspace) {
+      throw new Error(
         "Browser Canvas auth from environment requires SLACK_WORKSPACE_URL or --workspace",
-      );}
+      );
+    }
     return {
       workspace_url: normalizeWorkspaceUrl(envWorkspace),
       auth: { xoxc_token: envToken, xoxd_cookie: envCookie },
     };
   }
   const workspaces = creds.workspaces ?? [];
-  if (workspaces.length === 0)
-    {throw new Error(
+  if (workspaces.length === 0) {
+    throw new Error(
       'No Slack browser credentials available. Run "agent-slack auth import-desktop".',
-    );}
+    );
+  }
   if (!selector) {
     const def = creds.default_workspace_url;
     return (
@@ -129,9 +135,12 @@ export async function resolveCanvasWorkspace(selector?: string): Promise<CanvasW
       : url.includes(selector) ||
           (w.workspace_name ?? "").toLowerCase().includes(selector.toLowerCase());
   });
-  if (matches.length === 1) {return matches[0];}
-  if (matches.length === 0)
-    {throw new Error(`No configured workspace matches selector "${selector}"`);}
+  if (matches.length === 1) {
+    return matches[0];
+  }
+  if (matches.length === 0) {
+    throw new Error(`No configured workspace matches selector "${selector}"`);
+  }
   throw new Error(`Workspace selector "${selector}" is ambiguous`);
 }
 
@@ -143,7 +152,9 @@ export async function slackApi(
   const body = new URLSearchParams();
   body.set("token", workspace.auth.xoxc_token);
   for (const [key, value] of Object.entries(params)) {
-    if (value === undefined) {continue;}
+    if (value === undefined) {
+      continue;
+    }
     body.set(key, typeof value === "object" ? JSON.stringify(value) : String(value));
   }
   const resp = await fetch(`${workspace.workspace_url.replace(/\/$/, "")}/api/${method}`, {
@@ -166,10 +177,11 @@ export async function privateCanvasPost(
     body,
   });
   const binary = Buffer.from(await resp.arrayBuffer());
-  if (!resp.ok)
-    {throw new Error(
+  if (!resp.ok) {
+    throw new Error(
       `Private Canvas request failed: HTTP ${resp.status}: ${binary.toString("utf8").slice(0, 240)}`,
-    );}
+    );
+  }
   return binary;
 }
 
@@ -183,8 +195,9 @@ export async function loadCanvasEditContext(
     allProtoStrings(payload).find(
       (value) => /^[A-Za-z0-9]{11}$/.test(value) && value !== input.threadId,
     );
-  if (!docId)
-    {throw new Error(`Canvas load-data did not return a document id for ${input.canvasId}`);}
+  if (!docId) {
+    throw new Error(`Canvas load-data did not return a document id for ${input.canvasId}`);
+  }
   return {
     ...controller,
     threadId: input.threadId,
@@ -267,8 +280,9 @@ export async function canvasInfo(
   canvasId: string,
 ): Promise<CanvasFile> {
   const payload = await slackApi(workspace, "files.info", { file: canvasId });
-  if (!isRecord(payload.file))
-    {throw new Error(`files.info did not return file metadata for ${canvasId}`);}
+  if (!isRecord(payload.file)) {
+    throw new Error(`files.info did not return file metadata for ${canvasId}`);
+  }
   return payload.file as CanvasFile;
 }
 
@@ -283,7 +297,9 @@ export async function readCanvas(
       : typeof file.url_private === "string"
         ? file.url_private
         : undefined;
-  if (!downloadUrl) {return { file, markdown: "" };}
+  if (!downloadUrl) {
+    return { file, markdown: "" };
+  }
   let html = await fetchBrowserText(workspace, downloadUrl);
   const threadId =
     typeof file.quip_thread_id === "string"
@@ -306,7 +322,7 @@ export async function readCanvas(
 
 export async function createCanvas(
   workspace: CanvasWorkspace,
-  input: { title: string; markdown?: string; channel?: string },
+  input: { title: string; markdown?: string; channel?: string; silent?: boolean },
 ): Promise<Record<string, unknown>> {
   const controller = await canvasControllerSession(workspace, true);
   const threadPrefix = await canvasThreadPrefix(workspace);
@@ -334,14 +350,17 @@ export async function createCanvas(
   ];
   for (const threadId of threadIds) {
     const canvasId = await lookupCanvasIdByThread(workspace, threadId);
-    if (!canvasId) {continue;}
-    if (input.channel)
-      {await shareCanvas(workspace, {
+    if (!canvasId) {
+      continue;
+    }
+    if (input.channel) {
+      await shareCanvas(workspace, {
         canvasId,
         channel: input.channel,
         grant: "write",
-        silent: true,
-      });}
+        silent: input.silent,
+      });
+    }
     const docId = threadIds.find(
       (value) => value !== threadId && value.startsWith(threadId.slice(0, 3)),
     );
@@ -473,8 +492,9 @@ export async function uploadCanvasFile(
   });
   const fileId = stringValue(upload.file) ?? stringValue(upload.file_id);
   const uploadUrl = stringValue(upload.upload_url);
-  if (!fileId || !uploadUrl)
-    {throw new Error("files.getUploadURL did not return file and upload_url");}
+  if (!fileId || !uploadUrl) {
+    throw new Error("files.getUploadURL did not return file and upload_url");
+  }
   const form = new FormData();
   form.set("file", new Blob([bytes]), title);
   const uploadResp = await fetch(uploadUrl, {
@@ -486,10 +506,11 @@ export async function uploadCanvasFile(
     body: form,
   });
   const uploadText = await uploadResp.text();
-  if (!uploadResp.ok)
-    {throw new Error(
+  if (!uploadResp.ok) {
+    throw new Error(
       `Slack upload URL failed: HTTP ${uploadResp.status}: ${uploadText.slice(0, 240)}`,
-    );}
+    );
+  }
   await slackApi(workspace, "files.completeUpload", {
     files: [{ id: fileId, title }],
     _x_reason: "upload-queue",
@@ -603,7 +624,9 @@ export async function fetchBrowserText(workspace: CanvasWorkspace, url: string):
     },
   });
   const text = await resp.text();
-  if (!resp.ok) {throw new Error(`HTTP ${resp.status}: ${text.slice(0, 240)}`);}
+  if (!resp.ok) {
+    throw new Error(`HTTP ${resp.status}: ${text.slice(0, 240)}`);
+  }
   return text;
 }
 
@@ -614,12 +637,19 @@ export function compactCanvasFile(
   return pruneEmpty({
     id: file.id,
     title: file.title ?? file.name,
-    url: buildSlackCanvasUrl(workspace.workspace_url, file.id, workspace.team_id ?? file.team_id),
+    url:
+      typeof file.permalink === "string"
+        ? file.permalink
+        : buildSlackCanvasUrl(
+            workspace.workspace_url,
+            file.id,
+            workspace.team_id ?? file.team_id ?? stringValue(file.user_team),
+          ),
     created: file.created,
     updated: file.updated,
     user: file.user,
     quip_thread_id: file.quip_thread_id,
-    team_id: workspace.team_id ?? file.team_id,
+    team_id: workspace.team_id ?? file.team_id ?? stringValue(file.user_team),
   });
 }
 
@@ -634,13 +664,21 @@ export function extractFirstShare(
           isRecord(fileOrPayload.file.shares)
         ? fileOrPayload.file.shares
         : undefined;
-  if (!isRecord(shares)) {return undefined;}
+  if (!isRecord(shares)) {
+    return undefined;
+  }
   for (const bucket of Object.values(shares)) {
-    if (!isRecord(bucket)) {continue;}
+    if (!isRecord(bucket)) {
+      continue;
+    }
     for (const [channel, entries] of Object.entries(bucket)) {
-      if (!Array.isArray(entries)) {continue;}
+      if (!Array.isArray(entries)) {
+        continue;
+      }
       for (const entry of entries) {
-        if (isRecord(entry) && typeof entry.ts === "string") {return { channel, ts: entry.ts };}
+        if (isRecord(entry) && typeof entry.ts === "string") {
+          return { channel, ts: entry.ts };
+        }
       }
     }
   }
@@ -655,7 +693,9 @@ export function extractCanvasFileThread(
   const shares = isRecord(file) && isRecord(file.shares) ? file.shares : undefined;
   if (shares && isRecord(shares.message_threads)) {
     const found = firstShareEntry(shares.message_threads);
-    if (found) {return found;}
+    if (found) {
+      return found;
+    }
   }
   return undefined;
 }
@@ -667,7 +707,9 @@ async function canvasControllerSession(
   const key = workspace.workspace_url;
   if (!forceRefresh) {
     const cached = controllerSessions.get(key);
-    if (cached) {return cached;}
+    if (cached) {
+      return cached;
+    }
   }
   const form = new FormData();
   form.set("token", workspace.auth.xoxc_token);
@@ -689,12 +731,15 @@ async function canvasControllerSession(
       `Private Canvas controller-init returned non-JSON HTTP ${resp.status}: ${text.slice(0, 240)}`,
     );
   }
-  if (!resp.ok)
-    {throw new Error(
+  if (!resp.ok) {
+    throw new Error(
       `Private Canvas controller-init failed: HTTP ${resp.status}: ${text.slice(0, 240)}`,
-    );}
+    );
+  }
   const userId = stringValue(payload.user_id);
-  if (!userId) {throw new Error("Private Canvas controller-init did not return a Quip user id");}
+  if (!userId) {
+    throw new Error("Private Canvas controller-init did not return a Quip user id");
+  }
   const session = {
     session: randomBytes(6).toString("hex"),
     userId,
@@ -726,7 +771,9 @@ async function canvasThreadPrefix(workspace: CanvasWorkspace): Promise<string> {
     const payload = await listCanvases(workspace, { count: 20, page: 1 });
     for (const file of payload.files) {
       const match = file.quip_thread_id?.match(/^([A-Za-z]{3})9[A-Za-z0-9]{7}$/);
-      if (match) {return match[1];}
+      if (match) {
+        return match[1];
+      }
     }
   } catch {
     // Fall back to the prefix observed in Slack web if recent files are unavailable.
@@ -779,27 +826,37 @@ function numberField(fields: ProtoField[], no: number): number | undefined {
 }
 
 function firstShareEntry(value: unknown): { channel: string; ts: string } | undefined {
-  if (!isRecord(value)) {return undefined;}
+  if (!isRecord(value)) {
+    return undefined;
+  }
   for (const [channel, entries] of Object.entries(value)) {
     if (Array.isArray(entries)) {
       for (const entry of entries) {
-        if (isRecord(entry) && typeof entry.ts === "string") {return { channel, ts: entry.ts };}
+        if (isRecord(entry) && typeof entry.ts === "string") {
+          return { channel, ts: entry.ts };
+        }
       }
       continue;
     }
     const nested = firstShareEntry(entries);
-    if (nested) {return nested;}
+    if (nested) {
+      return nested;
+    }
   }
   return undefined;
 }
 
 function hydrateWorkspace(value: unknown): CanvasWorkspace | null {
-  if (!isRecord(value) || typeof value.workspace_url !== "string") {return null;}
+  if (!isRecord(value) || typeof value.workspace_url !== "string") {
+    return null;
+  }
   const workspaceUrl = normalizeWorkspaceUrl(value.workspace_url);
   const auth = isRecord(value.auth) ? value.auth : {};
   const xoxc = keychainGet(`xoxc:${workspaceUrl}`) ?? stringValue(auth.xoxc_token);
   const xoxd = keychainGet("xoxd") ?? stringValue(auth.xoxd_cookie);
-  if (!xoxc || !xoxd) {return null;}
+  if (!xoxc || !xoxd) {
+    return null;
+  }
   return {
     workspace_url: workspaceUrl,
     workspace_name: stringValue(value.workspace_name),
@@ -844,7 +901,9 @@ async function parseSlackResponse(
 }
 
 function keychainGet(account: string): string | null {
-  if (process.platform !== "darwin") {return null;}
+  if (process.platform !== "darwin") {
+    return null;
+  }
   try {
     const out = execFileSync(
       "security",
@@ -871,15 +930,24 @@ function randomHex(bytes: number): string {
 }
 
 function pruneEmpty<T>(value: T): T {
-  if (Array.isArray(value))
-    {return value.map((item) => pruneEmpty(item)).filter((item) => item !== undefined) as T;}
-  if (!isRecord(value)) {return value;}
+  if (Array.isArray(value)) {
+    return value.map((item) => pruneEmpty(item)).filter((item) => item !== undefined) as T;
+  }
+  if (!isRecord(value)) {
+    return value;
+  }
   const out: Record<string, unknown> = {};
   for (const [key, child] of Object.entries(value)) {
     const next = pruneEmpty(child);
-    if (next === undefined || next === null) {continue;}
-    if (Array.isArray(next) && next.length === 0) {continue;}
-    if (isRecord(next) && Object.keys(next).length === 0) {continue;}
+    if (next === undefined || next === null) {
+      continue;
+    }
+    if (Array.isArray(next) && next.length === 0) {
+      continue;
+    }
+    if (isRecord(next) && Object.keys(next).length === 0) {
+      continue;
+    }
     out[key] = next;
   }
   return out as T;

@@ -10,6 +10,10 @@ import { formatOutboundSlackText } from "../slack/format-outbound.ts";
 import type { SlackApiClient } from "../slack/client.ts";
 import { uploadLocalFileToSlack } from "../slack/upload.ts";
 import { buildSlackMessageUrl } from "../slack/url.ts";
+import { getString, isRecord } from "../lib/object-type-guards.ts";
+
+const SLACK_FILE_ID_RE = /^F[A-Z0-9]{8,}$/;
+const CANVAS_MIMETYPE = "application/vnd.slack-docs";
 
 function loadBlocksFromPath(path: string): unknown[] {
   const raw = path === "-" ? readFileSync(0, "utf8") : readFileSync(path, "utf8");
@@ -33,6 +37,29 @@ function loadBlocksFromPath(path: string): unknown[] {
     }
   }
   return parsed;
+}
+
+async function attachmentForSlackFile(
+  client: SlackApiClient,
+  fileId: string,
+): Promise<Record<string, unknown>> {
+  const info = await client.api("files.info", { file: fileId });
+  const file = isRecord(info.file) ? info.file : {};
+  const title = getString(file.title) ?? getString(file.name) ?? fileId;
+  const permalink = getString(file.permalink);
+  if (!permalink) {
+    throw new Error(`Slack file ${fileId} did not include a permalink`);
+  }
+  const mimetype = getString(file.mimetype);
+  const label = mimetype === CANVAS_MIMETYPE ? "Slack Canvas" : "Slack file";
+  return {
+    fallback: `${label}: ${title}`,
+    title,
+    title_link: permalink,
+    text: label,
+    color: "#1d9bd1",
+    footer: label,
+  };
 }
 
 export type MessageCommandOptions = {
@@ -114,7 +141,7 @@ export async function sendMessage(input: {
     : input.text
       ? textToRichTextBlocks(input.text)
       : null;
-  const attachPaths = normalizeAttachPaths(input.options.attach);
+  const attachInputs = normalizeAttachInputs(input.options.attach);
 
   if (target.kind === "url") {
     const { ref } = target;
@@ -132,7 +159,7 @@ export async function sendMessage(input: {
           text: formattedText,
           blocks,
           threadTs,
-          attachPaths,
+          attachInputs,
         });
       },
     });
@@ -151,7 +178,7 @@ export async function sendMessage(input: {
           channelId: dmChannelId,
           text: formattedText,
           blocks,
-          attachPaths,
+          attachInputs,
         });
       },
     });
@@ -174,13 +201,13 @@ export async function sendMessage(input: {
         text: formattedText,
         blocks,
         threadTs: input.options.threadTs ? String(input.options.threadTs) : undefined,
-        attachPaths,
+        attachInputs,
       });
     },
   });
 }
 
-function normalizeAttachPaths(raw: string[] | undefined): string[] {
+function normalizeAttachInputs(raw: string[] | undefined): string[] {
   if (!Array.isArray(raw) || raw.length === 0) {
     return [];
   }
@@ -200,9 +227,15 @@ async function sendMessageToChannel(input: {
   text: string;
   blocks?: unknown[] | null;
   threadTs?: string;
-  attachPaths: string[];
+  attachInputs: string[];
 }): Promise<Record<string, unknown>> {
-  if (input.attachPaths.length === 0) {
+  const attachedFileIds = input.attachInputs.filter((value) => SLACK_FILE_ID_RE.test(value));
+  const attachPaths = input.attachInputs.filter((value) => !SLACK_FILE_ID_RE.test(value));
+  if (attachedFileIds.length > 0 && attachPaths.length > 0) {
+    throw new Error("--attach cannot mix existing Slack file IDs with local file paths");
+  }
+
+  if (input.attachInputs.length === 0) {
     const resp = await input.client.api("chat.postMessage", {
       channel: input.channelId,
       text: input.text,
@@ -235,8 +268,45 @@ async function sendMessageToChannel(input: {
     );
   }
 
+  if (attachedFileIds.length > 0) {
+    const attachments = await Promise.all(
+      attachedFileIds.map((fileId) => attachmentForSlackFile(input.client, fileId)),
+    );
+    const post = await input.client.api("chat.postMessage", {
+      channel: input.channelId,
+      text: input.text,
+      thread_ts: input.threadTs,
+      attachments,
+      unfurl_links: false,
+      unfurl_media: false,
+    });
+    const ts = typeof post.ts === "string" ? post.ts : undefined;
+    if (!ts) {
+      throw new Error("Slack did not return a timestamp for message attachment");
+    }
+    const channelId = typeof post.channel === "string" ? post.channel : input.channelId;
+    const permalink =
+      input.workspaceUrl && ts
+        ? buildSlackMessageUrl({
+            workspace_url: input.workspaceUrl,
+            channel_id: channelId,
+            message_ts: ts,
+            thread_ts: input.threadTs,
+          })
+        : undefined;
+    return {
+      ok: true,
+      channel_id: channelId,
+      ts,
+      thread_ts: input.threadTs,
+      permalink,
+      attached_file_ids: attachedFileIds,
+      message: post.message,
+    };
+  }
+
   let initialComment = input.text;
-  for (const filePath of input.attachPaths) {
+  for (const filePath of attachPaths) {
     await uploadLocalFileToSlack({
       client: input.client,
       channelId: input.channelId,

@@ -66,7 +66,7 @@ Run `agent-slack --help` (or `agent-slack <command> --help`) for the full option
   - Options:
     - `--workspace <url-or-unique-substring>` (needed for channel _names_ across multiple workspaces)
     - `--thread-ts <seconds>.<micros>` (optional, channel mode only)
-    - `--attach <path>` (repeatable; upload local files as attachments)
+    - `--attach <path-or-file-id>` (repeatable; upload local files or attach existing Slack file/Canvas IDs like `F0123456789`)
     - `--blocks <path>` raw Block Kit blocks from a JSON file (or `-` for stdin). Bypasses markdown-to-rich-text conversion; enables header/divider/section/table blocks. Cannot be combined with `--attach`.
 
 - `agent-slack message edit <target> <text>`
@@ -160,6 +160,22 @@ Common options:
 
 ## Canvas
 
+- For status/update posts, prefer Slack-native Canvas sharing or `message send ... --attach <canvasId>`; do not paste Canvas URLs into message body text just to trigger unfurls.
+- `agent-slack canvas read <canvas-url-or-id>`
+  - Options:
+    - `--workspace <url-or-unique-substring>` (required when passing an id and multiple workspaces)
+- `agent-slack canvas info <canvas-url-or-id>`
+  - Returns `canvas.url` as the team-qualified Slack permalink when available.
+- `agent-slack canvas create --title <title> --from <file|-> [--channel <C...>] [--silent]`
+  - With `--channel`, shares visibly in the channel by default; add `--silent` only when you want access without a feed message.
+- `agent-slack canvas share <canvas-url-or-id> --channel <C...> [--level viewer|editor] [--silent]`
+  - Shares an existing Canvas with a channel.
+- `agent-slack message send <target> <text> --attach <canvas-id>`
+  - Sends a normal message whose body is `<text>` and attaches the Canvas as a separate Slack file/card. This is the custom-intro-message pattern; avoid URL-in-body.
+- `agent-slack canvas validate <markdown-file|->`
+  - Validates Canvas markdown support before create/append/section operations.
+- `agent-slack canvas append|prepend|replace <canvas-url-or-id> --from <file|->`
+- `agent-slack canvas section list|insert|replace|delete ...`
 - `agent-slack canvas get <canvas-url-or-id>`
   - Options:
     - `--workspace <url-or-unique-substring>` (required when passing an id and multiple workspaces)

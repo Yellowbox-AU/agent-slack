@@ -140,6 +140,7 @@ agent-slack message draft "https://workspace.slack.com/archives/C123/p1700000000
 ```bash
 agent-slack message send "https://workspace.slack.com/archives/C123/p1700000000000000" "I can take this."
 agent-slack message send "alerts-staging" "here's the report" --attach ./report.md
+agent-slack message send "alerts-staging" "Canvas update attached." --attach F0123456789
 agent-slack message edit "https://workspace.slack.com/archives/C123/p1700000000000000" "I can take this today."
 agent-slack message delete "https://workspace.slack.com/archives/C123/p1700000000000000"
 
@@ -158,9 +159,11 @@ agent-slack message edit "general" "Updated text" --workspace "myteam" --ts "177
 agent-slack message delete "general" --workspace "myteam" --ts "1770165109.628379"
 ```
 
-Message options: `message send --attach <path>` uploads files; `message send|edit --blocks <path>` uses raw Block Kit JSON (`-` for stdin).
+Message options: `message send --attach <path-or-file-id>` uploads local files or attaches existing Slack file/Canvas IDs (`F...`); `message send|edit --blocks <path>` uses raw Block Kit JSON (`-` for stdin).
 
-`message send` returns `channel_id` plus the posted `ts` and a `permalink` (for non-attachment sends). `thread_ts` appears only when replying in a thread.
+For Canvas status updates, attach the Canvas instead of pasting its URL into message text. Use `message send <channel> "summary" --attach <canvasId>` when you want custom intro text with a Canvas card and no visible plaintext URL.
+
+`message send` returns `channel_id` plus the posted `ts` and a `permalink`. `thread_ts` appears only when replying in a thread.
 
 Mentions: just write `@U05BRPTKL6A`, `@here`, `@channel`, or `@everyone` — the CLI converts them to real Slack mention tokens and escapes literal `&`/`<`/`>` in your text. You don't need to wrap IDs yourself.
 
@@ -276,9 +279,14 @@ agent-slack unreads --include-system
 
 ```bash
 agent-slack canvas get "https://workspace.slack.com/docs/T123/F456"
+agent-slack canvas create --title "Project Notes" --from ./note.md --channel C0123ABC
+agent-slack canvas share F456 --channel C0123ABC
+agent-slack message send C0123ABC "Project notes attached." --attach F456
 agent-slack user list --workspace "https://workspace.slack.com" --limit 100
 agent-slack user get "@alice" --workspace "https://workspace.slack.com"
 ```
+
+When surfacing a Canvas in a channel, prefer Slack-native sharing/attachments over URL paste. `canvas create --channel` shares visibly by default; add `--silent` only for access grants that should not create a channel-feed share message.
 
 ## References
 

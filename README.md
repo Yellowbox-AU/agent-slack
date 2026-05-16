@@ -214,6 +214,7 @@ After sending, the editor shows a "View in Slack" link to the posted message.
 ```bash
 agent-slack message send "https://workspace.slack.com/archives/C123/p1700000000000000" "I can take this."
 agent-slack message send "#alerts-staging" "here's the report" --attach ./report.md
+agent-slack message send "#alerts-staging" "Canvas update attached." --attach F0123456789
 agent-slack message edit "https://workspace.slack.com/archives/C123/p1700000000000000" "I can take this today."
 agent-slack message delete "https://workspace.slack.com/archives/C123/p1700000000000000"
 agent-slack message react add "https://workspace.slack.com/archives/C123/p1700000000000000" "eyes"
@@ -229,7 +230,7 @@ agent-slack message delete "#general" --workspace "myteam" --ts "1770165109.6283
 
 Attach options for `message send`:
 
-- `--attach <path>` upload a local file (repeatable)
+- `--attach <path-or-file-id>` upload a local file or attach an existing Slack file/Canvas ID (`F...`) without putting a URL in the message body (repeatable)
 - `--blocks <path>` send raw [Block Kit](https://docs.slack.dev/block-kit/) blocks from a JSON file (or `-` for stdin). Bypasses the automatic markdown-to-rich-text conversion, unlocking header/divider/section/table blocks and other structured layouts. Cannot be combined with `--attach`.
 
 Example — post a message with a native Slack table block:
@@ -261,7 +262,9 @@ agent-slack message send "#alerts-staging" --blocks /tmp/blocks.json
 
 When `--blocks` is used, the positional `<text>` argument (if provided) is still sent as the message's `text` fallback (for notifications and unfurls).
 
-`message send` returns `channel_id` plus the posted `ts` and a `permalink` (for non-attachment sends). `thread_ts` appears only when replying in a thread.
+For Canvas status updates, prefer a Canvas attachment over pasting the Canvas URL into prose: `agent-slack message send "#alerts-staging" "Status canvas attached." --attach F0123456789`.
+
+`message send` returns `channel_id` plus the posted `ts` and a `permalink`. `thread_ts` appears only when replying in a thread.
 
 ### List, create, and invite channels
 
@@ -448,6 +451,16 @@ agent-slack later remind "https://workspace.slack.com/archives/C123/p17000000000
 agent-slack canvas get "https://workspace.slack.com/docs/T123/F456"
 agent-slack canvas get "F456" --workspace "https://workspace.slack.com"
 ```
+
+### Share a Canvas in a channel
+
+```bash
+agent-slack canvas create --title "Project Notes" --from ./note.md --channel C0123ABC
+agent-slack canvas share F456 --channel C0123ABC
+agent-slack message send C0123ABC "Project notes attached." --attach F456
+```
+
+`canvas create --channel` and `canvas share` create a visible Slack share by default; add `--silent` only when granting access without a channel-feed message. Use `message send ... --attach <canvasId>` for custom intro text with the Canvas as a separate attachment. Avoid pasting Canvas URLs into message bodies unless the visible URL itself is the desired content.
 
 ## Developing / Contributing
 

@@ -15,6 +15,30 @@ function createContext(calls: { method: string; params: Record<string, unknown> 
       if (method === "chat.postMessage") {
         return { ok: true, channel: String(params.channel), ts: "1770165109.628379" };
       }
+      if (method === "files.info") {
+        return {
+          ok: true,
+          file: {
+            id: params.file,
+            title: "Canvas Title",
+            permalink: `https://workspace.slack.com/docs/T123/${params.file}`,
+            mimetype: "application/vnd.slack-docs",
+          },
+        };
+      }
+      if (method === "chat.update") {
+        return {
+          ok: true,
+          channel: String(params.channel),
+          ts: String(params.ts),
+          message: {
+            text: params.text,
+            files: Array.isArray(params.file_ids)
+              ? params.file_ids.map((id) => ({ id, mimetype: "application/vnd.slack-docs" }))
+              : undefined,
+          },
+        };
+      }
       return { ok: true };
     },
   };
@@ -221,6 +245,53 @@ describe("sendMessage", () => {
     expect(calls[1]?.method).toBe("files.completeUploadExternal");
     expect(calls[1]?.params.initial_comment).toBeUndefined();
     expect(calls.some((c) => c.method === "chat.postMessage")).toBe(false);
+  });
+
+  test("attaches an existing Slack file id without putting a URL in message text", async () => {
+    const calls: { method: string; params: Record<string, unknown> }[] = [];
+    const ctx = createContext(calls);
+
+    const result = await sendMessage({
+      ctx,
+      targetInput: "C12345678",
+      text: "canvas update attached",
+      options: { attach: ["F0B3TBHQKMY"] },
+    });
+
+    expect(calls).toEqual([
+      {
+        method: "files.info",
+        params: {
+          file: "F0B3TBHQKMY",
+        },
+      },
+      {
+        method: "chat.postMessage",
+        params: {
+          channel: "C12345678",
+          text: "canvas update attached",
+          thread_ts: undefined,
+          attachments: [
+            {
+              fallback: "Slack Canvas: Canvas Title",
+              title: "Canvas Title",
+              title_link: "https://workspace.slack.com/docs/T123/F0B3TBHQKMY",
+              text: "Slack Canvas",
+              color: "#1d9bd1",
+              footer: "Slack Canvas",
+            },
+          ],
+          unfurl_links: false,
+          unfurl_media: false,
+        },
+      },
+    ]);
+    expect(result).toMatchObject({
+      ok: true,
+      channel_id: "C12345678",
+      ts: "1770165109.628379",
+      attached_file_ids: ["F0B3TBHQKMY"],
+    });
   });
 
   test("--blocks: reads Block Kit JSON from file and passes through unchanged", async () => {

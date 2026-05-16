@@ -72,7 +72,7 @@ export type PrivateTable = {
   id: string;
   rowIds: string[];
   columnIds: string[];
-  cells: Array<{ id: string; rowId: string; columnId: string; text: string; sectionId?: string }>[];
+  cells: { id: string; rowId: string; columnId: string; text: string; sectionId?: string }[][];
 };
 
 export type PrivateDocumentInput = {
@@ -120,12 +120,16 @@ export function parsePrivateMarkdownDocument(
       continue;
     }
     const trimmed = lines[i].trim();
-    if (trimmed.startsWith('```')) {
+    if (trimmed.startsWith("```")) {
       const language = trimmed.replace(/^```/, "").trim();
       i++;
       const body: string[] = [];
-      while (i < lines.length && !lines[i].trim().startsWith('```')) {body.push(lines[i++]);}
-      if (i < lines.length) {i++;}
+      while (i < lines.length && !lines[i].trim().startsWith("```")) {
+        body.push(lines[i++]);
+      }
+      if (i < lines.length) {
+        i++;
+      }
       const prefix = `\`\`\`${language ? escapePrivateBodyText(language) : ""}`;
       blocks.push({
         kind: "text",
@@ -138,6 +142,7 @@ export function parsePrivateMarkdownDocument(
     if (heading) {
       blocks.push({
         kind: "text",
+        type: heading[1].length === 1 ? 64 : undefined,
         style: heading[1].length,
         text: parsePrivateInlineBodyText(heading[2].trim(), context),
       });
@@ -151,8 +156,9 @@ export function parsePrivateMarkdownDocument(
     }
     if (/^>\s?/.test(trimmed)) {
       const body: string[] = [];
-      while (i < lines.length && /^>\s?/.test(lines[i].trim()))
-        {body.push(lines[i++].trim().replace(/^>\s?/, ""));}
+      while (i < lines.length && /^>\s?/.test(lines[i].trim())) {
+        body.push(lines[i++].trim().replace(/^>\s?/, ""));
+      }
       blocks.push({
         kind: "text",
         style: 16,
@@ -173,8 +179,9 @@ export function parsePrivateMarkdownDocument(
       continue;
     }
     const body: string[] = [];
-    while (i < lines.length && lines[i].trim() && !isPrivateMarkdownBlockStart(lines[i]))
-      {body.push(lines[i++].trimEnd());}
+    while (i < lines.length && lines[i].trim() && !isPrivateMarkdownBlockStart(lines[i])) {
+      body.push(lines[i++].trimEnd());
+    }
     blocks.push({
       kind: "text",
       style: 0,
@@ -183,9 +190,15 @@ export function parsePrivateMarkdownDocument(
   }
   return {
     blocks: blocks.filter((block) => {
-      if (block.kind === "list") {return block.items.length > 0;}
-      if (block.kind === "table") {return block.rows.length > 0;}
-      if (block.kind === "embed") {return block.url.length > 0;}
+      if (block.kind === "list") {
+        return block.items.length > 0;
+      }
+      if (block.kind === "table") {
+        return block.rows.length > 0;
+      }
+      if (block.kind === "embed") {
+        return block.url.length > 0;
+      }
       return block.type === 16 || block.text.length > 0;
     }),
     controls: context.controls,
@@ -218,8 +231,12 @@ export function decodePrivateBodyText(text: string): string {
     (_match, _tag, doubleHref, singleHref, rawLabel) => {
       const url = decodePrivateHtmlEntities(doubleHref ?? singleHref ?? "");
       const visible = decodePrivateHtmlEntities(stripPrivateInlineHtml(rawLabel ?? ""));
-      if (!url) {return visible;}
-      if (visible === url || !visible) {return url;}
+      if (!url) {
+        return visible;
+      }
+      if (visible === url || !visible) {
+        return url;
+      }
       return `[${visible}](${url})`;
     },
   );
@@ -503,12 +520,28 @@ export function buildPrivateMarkdownDocumentStrings(input: PrivateDocumentInput)
 
 export function buildPrivateDocumentData(sections: PrivateInsertSection[], title?: string): Buffer {
   const parts = sections.map((section) => protoMessage(1, [encodePrivateInsertSection(section)]));
-  if (title) {parts.push(buildPrivateTitleRichText(title));}
+  if (title) {
+    parts.push(buildPrivateTitleRichText(title));
+  }
   return Buffer.concat(parts);
 }
 
 export function encodePrivateInsertSection(section: PrivateInsertSection): Buffer {
-  if (section.control?.kind === "file") {return encodePrivateFileControlSection(section);}
+  if (section.control?.kind === "file") {
+    return encodePrivateFileControlSection(section);
+  }
+  if (section.type === 64) {
+    return Buffer.concat([
+      protoString(1, section.id),
+      protoVarint(2, section.sequence ?? 8000),
+      protoVarint(9, 64),
+      encodePrivateSectionBody(section),
+      protoMessage(13, []),
+      protoVarint(19, 1),
+      protoVarint(20, 1),
+      protoString(33, section.traceId),
+    ]);
+  }
   const isLinkUnfurlCard =
     section.control?.kind === "canvas" || section.control?.kind === "message";
   const parts: Buffer[] = [
@@ -523,14 +556,26 @@ export function encodePrivateInsertSection(section: PrivateInsertSection): Buffe
     protoVarint(11, section.control && !isLinkUnfurlCard ? 1 : 0),
     encodePrivateSectionBody(section),
   ];
-  parts.push(protoMessage(13, []));
+  parts.push(
+    section.parentId
+      ? protoMessage(13, [
+          protoString(1, section.parentId),
+          protoVarint(4, section.parentStyle ?? section.style),
+        ])
+      : protoMessage(13, []),
+  );
   parts.push(
     section.type === 64
       ? protoMessage(16, [protoVarint(4, 0), protoVarint(30, 5)])
       : protoMessage(16, [protoVarint(4, 0)]),
     protoVarint(19, 1),
     protoVarint(20, section.cell ? 2 : 1),
-    protoString(21, section.position),
+    protoString(
+      21,
+      section.parentId && section.parentTopPosition
+        ? `${section.parentTopPosition}-${section.position}`
+        : section.position,
+    ),
     protoVarint(29, section.cell ? 1 : 0),
     protoString(33, section.traceId),
     ...(section.cell
@@ -544,7 +589,9 @@ export function encodePrivateInsertSection(section: PrivateInsertSection): Buffe
       : []),
     protoVarint(35, 0),
   );
-  if (section.type !== 64) {parts.push(protoVarint(39, 0));}
+  if (section.type !== 64) {
+    parts.push(protoVarint(39, 0));
+  }
   return Buffer.concat(parts);
 }
 
@@ -607,9 +654,13 @@ export function decodeProto(buffer: Buffer): ProtoField[] {
     let value = 0n;
     for (;;) {
       const byte = buffer[offset++];
-      if (byte == null) {throw new Error("Unexpected end of protobuf varint");}
+      if (byte == null) {
+        throw new Error("Unexpected end of protobuf varint");
+      }
       value |= BigInt(byte & 0x7f) << shift;
-      if ((byte & 0x80) === 0) {return value;}
+      if ((byte & 0x80) === 0) {
+        return value;
+      }
       shift += 7n;
     }
   };
@@ -641,9 +692,13 @@ export function decodeProto(buffer: Buffer): ProtoField[] {
 export function allProtoStrings(fields: ProtoField[]): string[] {
   const out: string[] = [];
   for (const field of fields) {
-    if (field.wire !== 2 || !Buffer.isBuffer(field.value)) {continue;}
+    if (field.wire !== 2 || !Buffer.isBuffer(field.value)) {
+      continue;
+    }
     const text = field.value.toString("utf8");
-    if (/^[\x09\x0a\x0d\x20-\x7e]{2,}$/.test(text)) {out.push(text);}
+    if (/^[\x09\x0a\x0d\x20-\x7e]{2,}$/.test(text)) {
+      out.push(text);
+    }
     try {
       out.push(...allProtoStrings(decodeProto(field.value)));
     } catch {
@@ -665,8 +720,8 @@ function buildPrivateSections(
     if (block.kind === "list") {
       const parentId = privateTempSectionId(input.docId);
       const parentPosition = cursor;
-      sections.push(section(input, parentId, parentPosition, 8, block.style, "", index++));
-      cursor = nextPrivatePositionAfter(cursor);
+      sections.push(section(input, parentId, parentPosition, 1, block.style, "", index++));
+      cursor = nextPrivatePositionAfter(parentPosition);
       for (const item of block.items) {
         sections.push({
           ...section(input, privateTempSectionId(input.docId), cursor, 0, 0, item.text, index++),
@@ -885,19 +940,22 @@ function nativeTableSections(
 }
 
 function encodePrivateSectionBody(section: PrivateInsertSection): Buffer {
-  if (section.type === 64)
-    {return protoMessage(CANVAS_PROTO_TAGS.bodyField, [
+  if (section.type === 64) {
+    return protoMessage(CANVAS_PROTO_TAGS.bodyField, [
       protoMessage(CANVAS_PROTO_TAGS.titleTextField, [protoString(1, section.text)]),
-    ]);}
-  if (section.table)
-    {return protoMessage(CANVAS_PROTO_TAGS.bodyField, [
+    ]);
+  }
+  if (section.table) {
+    return protoMessage(CANVAS_PROTO_TAGS.bodyField, [
       section.type === 33 ? encodeNativeTable(section.table) : encodePrivateTable(section.table),
-    ]);}
-  if (!section.control)
-    {return protoMessage(CANVAS_PROTO_TAGS.bodyField, [
+    ]);
+  }
+  if (!section.control) {
+    return protoMessage(CANVAS_PROTO_TAGS.bodyField, [
       protoMessage(CANVAS_PROTO_TAGS.bodyTextField, [protoString(1, section.text)]),
-    ]);}
-  const {control} = section;
+    ]);
+  }
+  const { control } = section;
   if (control.kind === "channel") {
     return protoMessage(CANVAS_PROTO_TAGS.bodyField, [
       protoMessage(CANVAS_PROTO_TAGS.channelMentionBodyField, [protoString(1, `sc:${control.id}`)]),
@@ -1020,11 +1078,15 @@ function buildPrivateTitleRichText(title: string): Buffer {
 
 function encodePrivateInlineSegment(input: string, context?: InlineContext): string {
   const tokens = findControlTokens(input, context);
-  if (tokens.length === 0) {return formatEscapedMarkdown(escapePrivateBodyText(input));}
+  if (tokens.length === 0) {
+    return formatEscapedMarkdown(escapePrivateBodyText(input));
+  }
   let out = "";
   let cursor = 0;
   for (const token of tokens) {
-    if (token.start < cursor) {continue;}
+    if (token.start < cursor) {
+      continue;
+    }
     out += formatEscapedMarkdown(escapePrivateBodyText(input.slice(cursor, token.start)));
     out += token.html;
     cursor = token.end;
@@ -1037,7 +1099,9 @@ function findControlTokens(
   input: string,
   context?: InlineContext,
 ): { start: number; end: number; html: string }[] {
-  if (!context) {return [];}
+  if (!context) {
+    return [];
+  }
   const tokens: { start: number; end: number; html: string }[] = [];
   for (const match of input.matchAll(/<@((?:U|W)[A-Z0-9]{8,})(?:\|([^>]+))?>/g)) {
     tokens.push(
@@ -1097,12 +1161,16 @@ function parsePrivateListAt(
   context: InlineContext,
 ): { block: Extract<PrivateMarkdownBlock, { kind: "list" }>; next: number } | undefined {
   const first = classifyPrivateListLine(lines[start]);
-  if (!first) {return undefined;}
+  if (!first) {
+    return undefined;
+  }
   const items: { text: string }[] = [];
   let i = start;
   while (i < lines.length) {
     const current = classifyPrivateListLine(lines[i]);
-    if (!current || current.style !== first.style) {break;}
+    if (!current || current.style !== first.style) {
+      break;
+    }
     items.push({ text: parsePrivateInlineBodyText(current.text, context) });
     i++;
   }
@@ -1117,8 +1185,9 @@ function parsePrivateTableAt(
   if (
     !/^\s*\|.*\|\s*$/.test(lines[start] ?? "") ||
     !/^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(lines[start + 1] ?? "")
-  )
-    {return undefined;}
+  ) {
+    return undefined;
+  }
   const rows: string[][] = [
     splitTableRow(lines[start]).map((cell) =>
       decodePrivateBodyText(parsePrivateInlineBodyText(cell, context)),
@@ -1141,13 +1210,17 @@ function parsePrivateEmbedLine(
   context: InlineContext,
 ): Extract<PrivateMarkdownBlock, { kind: "embed" }> | undefined {
   const image = line.match(/^!\[([^\]\n]*)]\(([^)\s]+)\)$/);
-  if (image) {return { kind: "embed", embed_type: "image", text: image[1], url: image[2] };}
+  if (image) {
+    return { kind: "embed", embed_type: "image", text: image[1], url: image[2] };
+  }
   const file = line.match(/^<file:((?:F)[A-Z0-9]{8,})(?:\|([^>]+))?>$/);
   if (file) {
     return { kind: "embed", embed_type: "file", text: file[2], url: `slack-file://${file[1]}` };
   }
   const message = line.match(/^https:\/\/[^/\s]+\.slack\.com\/archives\/[CGD][A-Z0-9]+\/p\d+$/);
-  if (message) {return { kind: "embed", embed_type: "slack_message", url: line };}
+  if (message) {
+    return { kind: "embed", embed_type: "slack_message", url: line };
+  }
   return undefined;
 }
 
@@ -1162,18 +1235,24 @@ function splitTableRow(line: string): string[] {
 
 function classifyPrivateListLine(line: string): { style: number; text: string } | undefined {
   let match = line.match(/^\s*[-*+]\s+\[[ xX]\]\s+(.+)$/);
-  if (match) {return { style: PRIVATE_LIST_CHECKLIST_STYLE, text: match[1].trim() };}
+  if (match) {
+    return { style: PRIVATE_LIST_CHECKLIST_STYLE, text: match[1].trim() };
+  }
   match = line.match(/^\s*[-*+]\s+(.+)$/);
-  if (match) {return { style: PRIVATE_LIST_BULLET_STYLE, text: match[1].trim() };}
+  if (match) {
+    return { style: PRIVATE_LIST_BULLET_STYLE, text: match[1].trim() };
+  }
   match = line.match(/^\s*\d+[.)]\s+(.+)$/);
-  if (match) {return { style: PRIVATE_LIST_NUMBERED_STYLE, text: match[1].trim() };}
+  if (match) {
+    return { style: PRIVATE_LIST_NUMBERED_STYLE, text: match[1].trim() };
+  }
   return undefined;
 }
 
 function isPrivateMarkdownBlockStart(line: string): boolean {
   const trimmed = line.trim();
   return (
-    trimmed.startsWith('```') ||
+    trimmed.startsWith("```") ||
     /^#{1,6}\s+\S/.test(trimmed) ||
     /^>\s?/.test(trimmed) ||
     /^(-{3,}|\*{3,}|_{3,})$/.test(trimmed) ||
@@ -1214,8 +1293,12 @@ function decodePrivateHtmlEntities(text: string): string {
 }
 
 function safeFromCodePoint(code: number): string {
-  if (!Number.isFinite(code) || code <= 0 || code > 0x10ffff) {return "";}
-  if (code >= 0xd800 && code <= 0xdfff) {return "";}
+  if (!Number.isFinite(code) || code <= 0 || code > 0x10ffff) {
+    return "";
+  }
+  if (code >= 0xd800 && code <= 0xdfff) {
+    return "";
+  }
   try {
     return String.fromCodePoint(code);
   } catch {
@@ -1243,7 +1326,9 @@ function normalizeTableRows(rows: string[][]): string[][] {
   const filtered = rows
     .map((row) => row.map((cell) => String(cell ?? "")))
     .filter((row) => row.length > 0);
-  if (filtered.length === 0) {throw new Error("table input must contain at least one row");}
+  if (filtered.length === 0) {
+    throw new Error("table input must contain at least one row");
+  }
   const width = Math.max(...filtered.map((row) => row.length));
   return filtered.map((row) => [...row, ...Array.from({ length: width - row.length }, () => "")]);
 }
@@ -1251,13 +1336,17 @@ function normalizeTableRows(rows: string[][]): string[][] {
 function nextPrivatePositionAfter(position: string): string {
   const clean = position.replace(/:temp$/, "");
   const match = clean.match(/^(.*?)([a-y])$/);
-  if (match) {return `${match[1]}${String.fromCharCode(match[2].charCodeAt(0) + 1)}:temp`;}
+  if (match) {
+    return `${match[1]}${String.fromCharCode(match[2].charCodeAt(0) + 1)}:temp`;
+  }
   return `${clean}a:temp`;
 }
 
 function advancePrivatePosition(position: string, steps: number): string {
   let cursor = position;
-  for (let i = 0; i < steps; i++) {cursor = nextPrivatePositionAfter(cursor);}
+  for (let i = 0; i < steps; i++) {
+    cursor = nextPrivatePositionAfter(cursor);
+  }
   return cursor;
 }
 
