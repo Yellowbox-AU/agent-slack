@@ -3,8 +3,9 @@ type InlineStyle = { bold?: true; italic?: true; strike?: true; code?: true };
 type InlineElement =
   | { type: "text"; text: string; style?: InlineStyle }
   | { type: "link"; url: string; text?: string; style?: InlineStyle }
-  | { type: "user"; user_id: string }
-  | { type: "broadcast"; range: "here" | "channel" | "everyone" };
+  | { type: "user"; user_id: string; style?: InlineStyle }
+  | { type: "channel"; channel_id: string; style?: InlineStyle }
+  | { type: "broadcast"; range: "here" | "channel" | "everyone"; style?: InlineStyle };
 
 type RichTextElement =
   | { type: "rich_text_section"; elements: InlineElement[] }
@@ -37,14 +38,62 @@ const CODE_BLOCK_START = /^```/;
 const BLOCKQUOTE_RE = /^> (.*)$/;
 
 /**
+ * Emphasis span bounds, every one of them read off Slack's own parser by
+ * posting the shape raw and reading the blocks JSON back:
+ *
+ *  - an opener sits at the start of the text, or after whitespace, opening
+ *    punctuation, or `>` (`x>*y*` comes back bold, and the agent attribution
+ *    prefix `*Agent*<url|session>*Update […]*:` depends on it). `a*b*c` is
+ *    literal text, and so is `**bold**` — a marker cannot open after `*`.
+ *  - a closer is not followed by a word character: `*a*b` is literal text,
+ *    while `*alpha*<@U…>` and `*Update [x]*:` are bold.
+ *  - content may not start or end with whitespace, and may not cross a
+ *    newline, so a stray marker cannot pair with one on a later line.
+ *
+ * These bounds are what keep `thread_ts … message_ts` out of italics and
+ * `2*3 … 4*5` out of bold.
+ */
+const EMPHASIS_OPENER = `(?<![^\\s([{"'>])`;
+const EMPHASIS_CLOSER = `(?![A-Za-z0-9_])`;
+const emphasisSpan = (marker: string): string =>
+  `${EMPHASIS_OPENER}\\${marker}([^\\${marker}\\s\\n](?:[^\\${marker}\\n]*[^\\${marker}\\s\\n])?)\\${marker}${EMPHASIS_CLOSER}`;
+
+const INLINE_RE = new RegExp(
+  [
+    "`([^`]+)`",
+    emphasisSpan("*"),
+    emphasisSpan("_"),
+    emphasisSpan("~"),
+    "<@([UWB][A-Z0-9]+)(?:\\|[^>]*)?>",
+    "<#(C[A-Z0-9]+)(?:\\|[^>]*)?>",
+    "<!(here|channel|everyone)(?:\\|[^>]*)?>",
+    "<([^>|]+)\\|([^>]+)>",
+    "<([^>|]+)>",
+    "(?:^|(?<=[^A-Za-z0-9_]))@([UWB][A-Z0-9]{6,})\\b",
+    "(?:^|(?<=[^A-Za-z0-9_]))@(here|channel|everyone)\\b",
+  ].join("|"),
+  "g",
+);
+
+/** Merge an enclosing span's style into every element the span produced. */
+function withStyle(elements: InlineElement[], style: InlineStyle): InlineElement[] {
+  return elements.map((element) => ({ ...element, style: { ...element.style, ...style } }));
+}
+
+/**
  * Parse mrkdwn inline formatting into Slack rich_text inline elements.
  *
  * Handles: *bold*, _italic_, ~strike~, `code`, <url|label>, <url>
+ *
+ * Emphasis spans are parsed recursively so a mention, broadcast, or link inside
+ * one becomes a real entity element carrying the span's style, exactly as
+ * Slack's own server-side mrkdwn parser does. Without the recursion the span
+ * body was emitted as literal styled text and `*<@U…> hi*` posted the raw
+ * `<@U…>` characters instead of a mention.
  */
 export function parseInlineElements(text: string): InlineElement[] {
   const elements: InlineElement[] = [];
-  const re =
-    /`([^`]+)`|\*([^*]+)\*|_([^_]+)_|~([^~]+)~|<@([UWB][A-Z0-9]+)(?:\|[^>]*)?>|<!(here|channel|everyone)(?:\|[^>]*)?>|<([^>|]+)\|([^>]+)>|<([^>|]+)>|(?:^|(?<=[^A-Za-z0-9_]))@([UWB][A-Z0-9]{6,})\b|(?:^|(?<=[^A-Za-z0-9_]))@(here|channel|everyone)\b/g;
+  const re = new RegExp(INLINE_RE.source, "g");
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 
@@ -66,6 +115,7 @@ export function parseInlineElements(text: string): InlineElement[] {
       italic,
       strike,
       userToken,
+      channelToken,
       broadcastToken,
       linkUrl,
       linkText,
@@ -76,13 +126,17 @@ export function parseInlineElements(text: string): InlineElement[] {
     if (code != null) {
       elements.push({ type: "text", text: code, style: { code: true } });
     } else if (bold != null) {
-      elements.push({ type: "text", text: bold, style: { bold: true } });
+      elements.push(...withStyle(parseInlineElements(bold), { bold: true }));
     } else if (italic != null) {
-      elements.push({ type: "text", text: italic, style: { italic: true } });
+      elements.push(...withStyle(parseInlineElements(italic), { italic: true }));
     } else if (strike != null) {
-      elements.push({ type: "text", text: strike, style: { strike: true } });
+      elements.push(...withStyle(parseInlineElements(strike), { strike: true }));
     } else if (userToken != null) {
       elements.push({ type: "user", user_id: userToken });
+    } else if (channelToken != null) {
+      // `<#C…|label>` is a channel ref, not a link. Without this branch it fell
+      // through to the labelled-link branch and posted a dead `#C…` link.
+      elements.push({ type: "channel", channel_id: channelToken });
     } else if (broadcastToken != null) {
       elements.push({
         type: "broadcast",
