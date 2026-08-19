@@ -314,6 +314,35 @@ describe("parseInlineElements: entities inside emphasis spans", () => {
       { type: "text", text: ": hi" },
     ]);
   });
+
+  test("usergroup ref inside a bold span carries the style", () => {
+    expect(parseInlineElements("*<!subteam^S077S3AH1EY> ping*")).toEqual([
+      { type: "usergroup", usergroup_id: "S077S3AH1EY", style: { bold: true } },
+      { type: "text", text: " ping", style: { bold: true } },
+    ]);
+  });
+
+  test("channel ref with a G id inside a bold span carries the style", () => {
+    expect(parseInlineElements("*<#G012ABCDE> there*")).toEqual([
+      { type: "channel", channel_id: "G012ABCDE", style: { bold: true } },
+      { type: "text", text: " there", style: { bold: true } },
+    ]);
+  });
+
+  test("emoji inside a bold span stays unstyled while the text is bold", () => {
+    expect(parseInlineElements("*bold :zap: text*")).toEqual([
+      { type: "text", text: "bold ", style: { bold: true } },
+      { type: "emoji", name: "zap" },
+      { type: "text", text: " text", style: { bold: true } },
+    ]);
+  });
+
+  test("emoji inside an italic span stays unstyled while the text is italic", () => {
+    expect(parseInlineElements("_see :zap:_")).toEqual([
+      { type: "text", text: "see ", style: { italic: true } },
+      { type: "emoji", name: "zap" },
+    ]);
+  });
 });
 
 describe("textToRichTextBlocks", () => {
