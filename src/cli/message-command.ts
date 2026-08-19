@@ -9,13 +9,18 @@ import {
   sendMessage,
   type MessageCommandOptions,
 } from "./message-actions.ts";
-import { draftMessage } from "./draft-actions.ts";
+import { composeMessage } from "./compose-actions.ts";
+import { registerScheduledMessageCommand } from "./message-scheduled-command.ts";
+import { registerMessageDraftCommand } from "./message-draft-command.ts";
+import { isSafeModeEnabled, redirectSendToDraft, safeModeBlockedError } from "./safe-mode.ts";
 
 function collectOptionValue(value: string, previous: string[] = []): string[] {
   return [...previous, value];
 }
 
 export function registerMessageCommand(input: { program: Command; ctx: CliContext }): void {
+  const safeModeActive = (): boolean =>
+    isSafeModeEnabled({ cliFlag: Boolean(input.program.opts().safeMode) });
   const messageCmd = input.program
     .command("message")
     .description("Read/write Slack messages (token-efficient JSON)");
@@ -60,7 +65,10 @@ export function registerMessageCommand(input: { program: Command; ctx: CliContex
       "--workspace <url>",
       "Workspace selector (full URL or unique substring; needed when using #channel/channel id across multiple workspaces)",
     )
-    .option("--thread-ts <ts>", "Thread root ts (lists thread replies instead of channel history)")
+    .option(
+      "--thread-ts <ts>",
+      "Thread root ts (lists the thread root and replies instead of channel history)",
+    )
     .option("--ts <ts>", "Message ts (resolve message to its thread)")
     .option("--limit <n>", "Max messages to return for channel history (default 25, max 200)")
     .option("--oldest <ts>", "Only messages after this ts (channel history mode)")
@@ -117,6 +125,9 @@ export function registerMessageCommand(input: { program: Command; ctx: CliContex
         { workspace?: string; ts?: string; blocks?: string },
       ];
       try {
+        if (safeModeActive()) {
+          throw safeModeBlockedError("edit");
+        }
         const payload = await editMessage({
           ctx: input.ctx,
           targetInput,
@@ -142,6 +153,9 @@ export function registerMessageCommand(input: { program: Command; ctx: CliContex
     .action(async (...args) => {
       const [targetInput, options] = args as [string, { workspace?: string; ts?: string }];
       try {
+        if (safeModeActive()) {
+          throw safeModeBlockedError("delete");
+        }
         const payload = await deleteMessage({
           ctx: input.ctx,
           targetInput,
@@ -156,17 +170,24 @@ export function registerMessageCommand(input: { program: Command; ctx: CliContex
 
   messageCmd
     .command("send")
-    .description("Send a message (optionally into a thread)")
-    .argument("<target>", "Slack message URL, #name/name, or channel id")
+    .description("Send or schedule a message (optionally into a thread)")
+    .argument("<target>", "Slack message URL, #name/name, channel ID, or user ID (U.../W...)")
     .argument("[text]", "Message text to post (optional when using --attach)")
     .option(
       "--workspace <url>",
       "Workspace selector (full URL or unique substring; needed when using #channel/channel id across multiple workspaces)",
     )
-    .option("--thread-ts <ts>", "Thread root ts to post into (optional)")
+    .option(
+      "--thread-ts <ts>",
+      "Thread root ts for channel targets; URL targets derive their thread context",
+    )
+    .option(
+      "--reply-broadcast",
+      "Also broadcast this thread reply to the parent channel (requires thread context; use --thread-ts for channel targets; not supported for user-ID/DM targets; cannot be combined with --attach).",
+    )
     .option(
       "--attach <path-or-file-id>",
-      "Attach a local file path or existing Slack file/canvas ID (repeatable)",
+      "Attach a local file path or existing Slack file/canvas ID (repeatable); for local paths, text becomes an initial comment without automatic list conversion",
       collectOptionValue,
       [],
     )
@@ -174,14 +195,31 @@ export function registerMessageCommand(input: { program: Command; ctx: CliContex
       "--blocks <path>",
       "Path to a JSON file containing a Block Kit blocks array. Bypasses automatic markdown-to-rich-text conversion. Use '-' to read from stdin. Cannot be combined with --attach.",
     )
+    .option(
+      "--schedule <time>",
+      "Schedule delivery at an ISO 8601 timestamp with explicit timezone (or Unix timestamp), within 120 days. Cannot be combined with --attach.",
+    )
+    .option(
+      "--schedule-in <duration>",
+      "Schedule delivery within 120 days after a duration or future phrase, e.g. 3h or monday 9am. Named phrases use this process's local timezone. Cannot be combined with --attach.",
+    )
     .action(async (...args) => {
       const [targetInput, text, options] = args as [
         string,
         string | undefined,
-        { workspace?: string; threadTs?: string; attach?: string[]; blocks?: string },
+        {
+          workspace?: string;
+          threadTs?: string;
+          attach?: string[];
+          blocks?: string;
+          replyBroadcast?: boolean;
+          schedule?: string;
+          scheduleIn?: string;
+        },
       ];
       const hasAttach = (options.attach ?? []).length > 0;
       const hasBlocks = options.blocks !== undefined;
+      const hasSchedule = options.schedule !== undefined || options.scheduleIn !== undefined;
       if (!text && !hasAttach && !hasBlocks) {
         console.error("Error: <text> is required when no --attach files or --blocks are provided.");
         process.exitCode = 1;
@@ -192,13 +230,39 @@ export function registerMessageCommand(input: { program: Command; ctx: CliContex
         process.exitCode = 1;
         return;
       }
+      if (options.replyBroadcast && hasAttach) {
+        console.error(
+          "Error: --reply-broadcast cannot be combined with --attach (Slack file uploads do not support thread broadcasts).",
+        );
+        process.exitCode = 1;
+        return;
+      }
+      if (options.schedule !== undefined && options.scheduleIn !== undefined) {
+        console.error("Error: --schedule and --schedule-in are mutually exclusive.");
+        process.exitCode = 1;
+        return;
+      }
+      if (hasSchedule && hasAttach) {
+        console.error(
+          "Error: --schedule/--schedule-in cannot be combined with --attach (Slack scheduled messages do not support file uploads).",
+        );
+        process.exitCode = 1;
+        return;
+      }
       try {
-        const payload = await sendMessage({
-          ctx: input.ctx,
-          targetInput,
-          text: text ?? "",
-          options,
-        });
+        const payload = safeModeActive()
+          ? await redirectSendToDraft({
+              ctx: input.ctx,
+              targetInput,
+              text: text ?? "",
+              options,
+            })
+          : await sendMessage({
+              ctx: input.ctx,
+              targetInput,
+              text: text ?? "",
+              options,
+            });
         console.log(JSON.stringify(payload, null, 2));
       } catch (err: unknown) {
         console.error(input.ctx.errorMessage(err));
@@ -206,16 +270,24 @@ export function registerMessageCommand(input: { program: Command; ctx: CliContex
       }
     });
 
+  registerScheduledMessageCommand({ messageCmd, ctx: input.ctx });
+  registerMessageDraftCommand({ messageCmd, ctx: input.ctx });
+
   messageCmd
-    .command("draft")
-    .description("Open a rich Slack-like editor to compose and send a message")
+    .command("compose")
+    .description(
+      "Open a send-capable rich editor in the browser; CI skips the editor and immediately sends supplied text",
+    )
     .argument("<target>", "Slack message URL, #name/name, or channel id")
-    .argument("[text]", "Initial draft text (mrkdwn format)")
+    .argument("[text]", "Initial message text (mrkdwn; sent immediately when CI skips the editor)")
     .option(
       "--workspace <url>",
       "Workspace selector (full URL or unique substring; needed when using #channel/channel id across multiple workspaces)",
     )
-    .option("--thread-ts <ts>", "Thread root ts to post into (optional)")
+    .option(
+      "--thread-ts <ts>",
+      "Thread root ts to post into; overrides the URL-derived thread when supplied",
+    )
     .action(async (...args) => {
       const [targetInput, text, options] = args as [
         string,
@@ -223,7 +295,7 @@ export function registerMessageCommand(input: { program: Command; ctx: CliContex
         { workspace?: string; threadTs?: string },
       ];
       try {
-        const payload = await draftMessage({
+        const payload = await composeMessage({
           ctx: input.ctx,
           targetInput,
           initialText: text,

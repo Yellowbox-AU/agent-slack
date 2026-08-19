@@ -12,10 +12,6 @@ export function isChannelId(input: string): boolean {
   return /^[CDG][A-Z0-9]{8,}$/.test(input);
 }
 
-export function isUserId(input: string): boolean {
-  return /^U[A-Z0-9]{8,}$/.test(input);
-}
-
 /**
  * Open (or reuse) a DM channel with a user via conversations.open.
  * Returns the DM channel ID.
@@ -178,6 +174,58 @@ export async function listAllConversations(
     exclude_archived: options?.excludeArchived ?? true,
   });
   return normalizeConversationsPage(resp);
+}
+
+/**
+ * Enumerate the current user's joined conversations via `client.counts` +
+ * `conversations.info`.
+ *
+ * This mirrors the slack web client's sidebar method and works on Enterprise
+ * Grid, where `users.conversations` / `conversations.list` return
+ * `enterprise_is_restricted` for browser/session tokens. `client.counts`
+ * returns ids only (no names) split across `channels`, `mpims` and `ims`, so
+ * each id is enriched with `conversations.info` to produce the same
+ * channel-record shape as the other list helpers.
+ *
+ * Limitations vs `users.conversations`: there is no server-side pagination
+ * (`client.counts` returns everything at once and is sliced to `limit`
+ * locally), `--cursor` is not supported, and only the current user's
+ * conversations are available (`--user` is not supported).
+ */
+export async function listConversationsViaCounts(
+  client: SlackApiClient,
+  options?: { limit?: number },
+): Promise<ConversationsPage> {
+  const limit = normalizeConversationsLimit(options?.limit);
+
+  const resp = await client.api("client.counts", {
+    thread_count_by_channel: true,
+  });
+
+  const entries = [
+    ...asArray(resp.channels).filter(isRecord),
+    ...asArray(resp.mpims).filter(isRecord),
+    ...asArray(resp.ims).filter(isRecord),
+  ];
+
+  const ids = entries
+    .map((entry) => getString(entry.id))
+    .filter((id): id is string => Boolean(id))
+    .slice(0, limit);
+
+  const channels = await Promise.all(
+    ids.map(async (id) => {
+      try {
+        const info = await client.api("conversations.info", { channel: id });
+        return isRecord(info.channel) ? info.channel : { id };
+      } catch {
+        // counts may reference a conversation we can't open/info; keep the id
+        return { id };
+      }
+    }),
+  );
+
+  return { channels, next_cursor: undefined };
 }
 
 export function normalizeConversationsPage(resp: Record<string, unknown>): ConversationsPage {

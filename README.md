@@ -6,7 +6,7 @@ Guiding principle:
 
 - **Token-efficient** — (compact JSON, minimal duplication, and empty/null fields pruned) so LLMs can consume results cheaply.
 - **Zero-config auth** — Auth just works if you have Slack Desktop (with fallbacks available). No Python dependency.
-- **Human-in-the-loop** — When appropriate (not in CI environments), loop humans in. Ex: `message draft`
+- **Human-in-the-loop** — When appropriate (not in CI environments), loop humans in. Ex: `message compose`
   <img width="1228" height="741" alt="image" src="https://github.com/user-attachments/assets/92ecbb71-18ca-4516-a874-c83c154b0709" />
 
 ## Getting started
@@ -34,13 +34,16 @@ nix run github:stablyai/agent-slack
 - **Read**: fetch a message, browse channel history, list full threads
 - **Search**: messages + files (with filters)
 - **Artifacts**: auto-download snippets/images/files to local paths for agents
-- **Write**: reply, edit/delete messages, add reactions (bullet lists auto-render as native Slack rich text)
+- **Write**: send now or schedule delivery, edit/delete messages, add reactions (bullet lists auto-render as native Slack rich text)
+- **Compose & drafts**: open a browser editor (`message compose`), or manage Slack-native drafts that show up in your Slack client (`message draft`)
 - **Channels**: list conversations, create channels, and invite users by id/handle/email
-- **Canvas**: fetch Slack canvases as Markdown
+- **Canvas**: create Slack canvases from Markdown and fetch them as Markdown
 
 ## Agent skill
 
 This repo ships an agent skill at `skills/agent-slack/` compatible with Claude Code, Codex, Cursor, etc
+
+Treat the installed CLI's `agent-slack --help` and `agent-slack <command> --help` output as authoritative for supported commands and flags.
 
 **Install via [skills.sh](https://skills.sh)** (recommended):
 
@@ -66,14 +69,23 @@ agent-slack
 │   ├── whoami
 │   ├── test
 │   ├── import-desktop
+│   ├── import-brave
 │   ├── import-chrome
 │   ├── import-firefox
 │   └── parse-curl
 ├── message
 │   ├── get   <target>             # fetch 1 message (+ thread meta )
 │   ├── list  <target>             # fetch thread or recent channel messages
-│   ├── send  <target> <text>      # send / reply (supports --attach)
-│   ├── draft <target> [text]      # open Slack-like editor in browser
+│   ├── send  <target> [text]      # send / reply / schedule (supports --attach, --blocks)
+│   ├── scheduled
+│   │   ├── list                   # list pending scheduled messages
+│   │   └── cancel <id>            # cancel a pending scheduled message
+│   ├── compose <target> [text]    # open Slack-like editor in browser
+│   ├── draft                      # Slack-native drafts (appear in your Slack client)
+│   │   ├── list                   # list Slack-native drafts
+│   │   ├── create <target> <text> # create a Slack-native draft
+│   │   ├── update <id> <text>     # replace a draft's text
+│   │   └── delete <id>            # delete a draft
 │   ├── edit  <target> <text>      # edit a message
 │   ├── delete <target>            # delete a message
 │   └── react
@@ -96,12 +108,13 @@ agent-slack
 │   ├── get     <id>               # workflow definition + form fields
 │   └── run     <trigger-id>       # trip a workflow trigger
 └── canvas
+    ├── create                     # markdown file/blob → canvas
     └── get <canvas-url-or-id>     # canvas → markdown
 ```
 
 Notes:
 
-- Output is **always JSON** and aggressively pruned (`null`/empty fields removed).
+- Slack data commands output aggressively pruned JSON (`null`/empty fields removed); help, update, and some authentication setup commands output text.
 - Attached files are auto-downloaded and returned as absolute local paths.
 
 ## Authentication (no fancy setup)
@@ -109,17 +122,21 @@ Notes:
 On macOS and Windows, authentication happens automatically:
 
 - Default: reads Slack Desktop local data (no need to quit Slack)
-- Fallbacks: if that fails, tries Chrome/Firefox extraction (macOS)
+- Fallbacks: if that fails, tries Chrome/Brave/Firefox extraction (macOS)
 
 You can also run manual imports:
 
 ```bash
 agent-slack auth whoami
 agent-slack auth import-desktop
+agent-slack auth import-brave
 agent-slack auth import-chrome
 agent-slack auth import-firefox
 agent-slack auth test
 ```
+
+> [!NOTE]
+> `import-brave` / `import-chrome` read tokens from a logged-in Slack tab via AppleScript. Both browsers ship with **Allow JavaScript from Apple Events** disabled by default — enable it in **View → Developer** before running these commands. macOS will prompt for your password the first time.
 
 Alternatively, set env vars:
 
@@ -192,22 +209,66 @@ Optional:
 agent-slack message get "https://workspace.slack.com/archives/C123/p1700000000000000" --include-reactions
 ```
 
-### Draft a message (browser editor)
+### Compose a message (browser editor)
 
 Opens a Slack-like WYSIWYG editor in your browser for composing messages with full formatting support (bold, italic, strikethrough, links, lists, quotes, code, code blocks).
 
 ```bash
 # Open editor for a channel
-agent-slack message draft "#general"
+agent-slack message compose "#general"
 
 # Open editor with initial text
-agent-slack message draft "#general" "Here's my update"
+agent-slack message compose "#general" "Here's my update"
 
 # Reply in a thread
-agent-slack message draft "https://workspace.slack.com/archives/C123/p1700000000000000"
+agent-slack message compose "https://workspace.slack.com/archives/C123/p1700000000000000"
 ```
 
 After sending, the editor shows a "View in Slack" link to the posted message.
+
+`message compose` is send-capable. In CI, it skips the browser editor and immediately sends supplied text; do not use it for a compose-only request in a noninteractive environment.
+
+### Slack-native drafts
+
+Manage drafts through Slack's own drafts API, so they show up natively in the user's Slack client (mobile and desktop) ready to review and send. Requires browser-style auth (xoxc/xoxd).
+
+> [!NOTE]
+> These commands use Slack's **undocumented** internal `drafts.*` client endpoints (the same ones the Slack app uses), authenticated with your own browser session. They act only as you, on your own drafts — nothing is exposed that you can't already see, and `create` posts nothing. But because the endpoints are unsupported: their behavior may change without notice, and on **Enterprise Grid** this style of session-token API use can be flagged by Slack's security/anomaly detection. This is the same auth model the rest of agent-slack already uses (`later`, `unreads`, `search`); use it where that's acceptable.
+
+```bash
+# List unsent drafts
+agent-slack message draft list
+
+# Draft a message to a channel (shows up in Slack's Drafts section)
+agent-slack message draft create "#general" "Here's my update"
+
+# Draft a thread reply
+agent-slack message draft create "https://workspace.slack.com/archives/C123/p1700000000000000" "Looking into it"
+
+# Replace a draft's text, or delete it
+agent-slack message draft update "DR_ID" "Here's my revised update"
+agent-slack message draft delete "DR_ID"
+```
+
+### Safe mode (enforced human-in-the-loop)
+
+Skill instructions like "always use `draft`, never `send`" are guidance an agent can ignore. Safe mode enforces it at the tool level — useful when an AI agent has access to `agent-slack` and you want a guarantee that nothing posts without human review.
+
+```bash
+# Env var (recommended for agent environments)
+export AGENT_SLACK_SAFE_MODE=1
+
+# Or a global CLI flag
+agent-slack --safe-mode message send "#general" "hello"
+```
+
+While safe mode is active:
+
+- `message send` → redirected to the draft editor with the text pre-filled; you review and send from the browser. The output includes `"safe_mode": true` and `"redirected_from": "send"`, and a warning is printed to stderr. Flags the editor cannot represent (`--attach`, `--blocks`, `--schedule`, `--schedule-in`, `--reply-broadcast`) are rejected with an error instead of being silently dropped.
+- `message edit` and `message delete` → blocked with an error.
+- All read operations (`get`, `list`, `search`, etc.) and reactions are unchanged.
+
+The env var accepts `1`, `true`, `yes`, or `on` (case-insensitive); anything else leaves safe mode off.
 
 ### Reply, edit, delete, and react
 
@@ -215,6 +276,8 @@ After sending, the editor shows a "View in Slack" link to the posted message.
 agent-slack message send "https://workspace.slack.com/archives/C123/p1700000000000000" "I can take this."
 agent-slack message send "#alerts-staging" "here's the report" --attach ./report.md
 agent-slack message send "#alerts-staging" "Canvas update attached." --attach F0123456789
+agent-slack message send "#announcements" "Deploy starts at 6pm." --schedule "<future-iso-with-timezone>"
+agent-slack message send "U05BRPTKL6A" "Heads up before standup" --schedule-in "monday 9am"
 agent-slack message edit "https://workspace.slack.com/archives/C123/p1700000000000000" "I can take this today."
 agent-slack message delete "https://workspace.slack.com/archives/C123/p1700000000000000"
 agent-slack message react add "https://workspace.slack.com/archives/C123/p1700000000000000" "eyes"
@@ -228,10 +291,51 @@ agent-slack message edit "#general" "Updated text" --workspace "myteam" --ts "17
 agent-slack message delete "#general" --workspace "myteam" --ts "1770165109.628379"
 ```
 
-Attach options for `message send`:
+`message edit` and ordinary `message send` calls convert bullet/numbered lists to Slack native rich text. `message send --blocks` uses the supplied blocks instead, while `message send --attach` sends its initial comment as plain text without automatic list conversion. Inside auto-converted lists, inline mentions, broadcasts, emoji shortcodes, `<#C...>` channel references, and Slack manual links such as `<https://example.com/pull/42|PR #42>` are preserved as Slack elements. CommonMark links such as `[PR #42](https://example.com/pull/42)` are not converted into labeled link elements.
 
-- `--attach <path-or-file-id>` upload a local file or attach an existing Slack file/Canvas ID (`F...`) without putting a URL in the message body (repeatable)
+Send options for `message send`:
+
+- `--attach <path-or-file-id>` upload a local file, or attach an existing Slack file/Canvas ID (`F...`) without putting a URL in the message body (repeatable; `<text>` is optional when attaching files)
 - `--blocks <path>` send raw [Block Kit](https://docs.slack.dev/block-kit/) blocks from a JSON file (or `-` for stdin). Bypasses the automatic markdown-to-rich-text conversion, unlocking header/divider/section/table blocks and other structured layouts. Cannot be combined with `--attach`.
+- `--reply-broadcast` when replying in a thread, also post the reply to the parent channel (Slack's "Also send to #channel" checkbox). For channel targets, pair with `--thread-ts`; for URL targets, the thread context is derived from the message. Not supported for DM targets; cannot be combined with `--attach`.
+- `--schedule <time>` schedule delivery at an ISO 8601 timestamp with explicit timezone (for example `YYYY-MM-DDTHH:mm:ss-07:00`) or a Unix timestamp. The timestamp must be in the future and within Slack's 120-day scheduled-send limit. Works with `--blocks`, `--thread-ts`, and `--reply-broadcast`; cannot be combined with `--attach`.
+- `--schedule-in <duration>` schedule delivery after a duration or simple future phrase (`30m`, `3h`, `2d`, `tomorrow 9am`, `monday 9am`; phrases use your local timezone). Mutually exclusive with `--schedule`; cannot be combined with `--attach`.
+
+Upload files through `message send`:
+
+```bash
+agent-slack message send "#general" "Coverage report" --attach ./report.md
+```
+
+Broadcast a thread reply to the parent channel:
+
+```bash
+agent-slack message send "#general" "Decision: shipping v2 today" \
+  --thread-ts "1770160000.000001" --reply-broadcast
+```
+
+Scheduled sends use Slack's server-side scheduled message queue:
+
+```bash
+# Absolute time with explicit timezone; replace with a future value within 120 days
+agent-slack message send "#general" "Reminder: deploy starts soon." \
+  --schedule "<future-iso-with-timezone>"
+
+# Relative / natural future time
+agent-slack message send "#general" "Monday launch checklist" --schedule-in "monday 9am"
+
+# Scheduled thread reply with a Block Kit payload
+agent-slack message send "#general" "fallback text" \
+  --thread-ts "1770160000.000001" --blocks /tmp/blocks.json --schedule-in "3h"
+```
+
+Manage pending scheduled messages:
+
+```bash
+agent-slack message scheduled list
+agent-slack message scheduled list --channel "#general" --limit 25
+agent-slack message scheduled cancel "Q1234ABCD" --channel "C12345678"
+```
 
 Example — post a message with a native Slack table block:
 
@@ -264,7 +368,7 @@ When `--blocks` is used, the positional `<text>` argument (if provided) is still
 
 For Canvas status updates, prefer a Canvas attachment over pasting the Canvas URL into prose: `agent-slack message send "#alerts-staging" "Status canvas attached." --attach F0123456789`.
 
-`message send` returns `channel_id` plus the posted `ts` and a `permalink`. `thread_ts` appears only when replying in a thread.
+`message send` returns `channel_id` plus the posted `ts` and a `permalink` (local-file uploads return `channel_id`/`thread_ts` only). `thread_ts` appears only when replying in a thread. Scheduled sends return `scheduled_message_id` and `post_at` instead of `ts`/`permalink`.
 
 ### List, create, and invite channels
 
@@ -285,7 +389,7 @@ agent-slack channel new --name "incident-war-room"
 agent-slack channel new --name "incident-leads" --private
 
 # Invite users by id, handle, or email
-agent-slack channel invite --channel "incident-war-room" --users "U01AAAA,@alice,bob@example.com"
+agent-slack channel invite --channel "incident-war-room" --users "U01234567,@alice,bob@example.com"
 
 # Invite external Slack Connect users by email (restricted by default)
 agent-slack channel invite --channel "incident-war-room" --users "partner@vendor.com" --external
@@ -313,7 +417,7 @@ Notes:
 }
 ```
 
-**`message list`** fetches all replies in a thread, or recent channel messages when no thread is specified. Use this when you need the full conversation:
+**`message list`** fetches the thread root plus all replies, or recent channel messages when no thread is specified. Use this when you need the full conversation:
 
 ```json
 {
@@ -333,7 +437,7 @@ When to use which:
 
 ### Files (snippets/images/attachments)
 
-`message get/list` auto-download attached files to an agent-friendly temp directory and return file metadata in `message.files[]`, including `name` when Slack provides the original filename and `path` for the local download. Failed downloads keep the attachment entry, preserve `message.files[].path` with a local `.download-error.txt` file, and include `message.files[].error`. `search messages` and `search all` use the same attachment shape for message results, while `search files` skips entries whose download fails.
+`message get/list` auto-download attached files to an agent-friendly temp directory and return file metadata in `message.files[]`, including `name` when Slack provides the original filename and `path` for the local download. Failed downloads keep the attachment entry, preserve `message.files[].path` with a local `.download-error.txt` file, and include `message.files[].error`. `search messages` and `search all` use the same attachment shape for message results, while `search files` skips entries whose download fails. Use `search messages --content-type file` when you also need the source-message permalink for a reply.
 
 - macOS default: `~/.agent-slack/tmp/downloads/`
 
@@ -361,6 +465,8 @@ Tips:
 
 ### Users
 
+Treat Slack user IDs beginning with `U` or `W` equivalently.
+
 ```bash
 # List users (email requires appropriate Slack scopes; fields are pruned if missing)
 agent-slack user list --workspace "https://workspace.slack.com" --limit 200 | jq .
@@ -368,6 +474,9 @@ agent-slack user list --workspace "https://workspace.slack.com" --limit 200 | jq
 # Get one user by id or handle
 agent-slack user get U12345678 --workspace "https://workspace.slack.com" | jq .
 agent-slack user get "@alice" --workspace "https://workspace.slack.com" | jq .
+
+# Open a DM or group DM with one to eight other users (the caller is implicit)
+agent-slack user dm-open "@alice" "@bob" --workspace "https://workspace.slack.com" | jq .
 ```
 
 ### Unreads (inbox view)
@@ -445,9 +554,18 @@ agent-slack later remind "https://workspace.slack.com/archives/C123/p17000000000
 agent-slack later remind "https://workspace.slack.com/archives/C123/p1700000000000000" --in tomorrow
 ```
 
-### Fetch a Canvas as Markdown
+Named reminder days such as `tomorrow` and `monday` mean 9:00 in the CLI process's local timezone. Use a Unix timestamp when timezone precision matters.
+
+### Create or fetch a Canvas as Markdown
 
 ```bash
+# Create from a local Markdown file
+agent-slack canvas create --title "Launch plan" --from ./launch-plan.md
+
+# Add the new canvas as a channel tab (required on free Slack plans)
+agent-slack canvas create --title "Launch plan" --from ./launch-plan.md --channel "project-launch"
+
+# Fetch an existing canvas as Markdown
 agent-slack canvas get "https://workspace.slack.com/docs/T123/F456"
 agent-slack canvas get "F456" --workspace "https://workspace.slack.com"
 ```
@@ -466,24 +584,6 @@ agent-slack message send C0123ABC "Project notes attached." --attach F456
 
 See [CONTRIBUTING.md](CONTRIBUTING.md).
 
----
+## Check out our other OSS project
 
-<p align="center">
-  <a href="https://stably.ai">
-    <img src="https://public-artifacts.stably.ai/logo-white-with-bg.png" height="96" alt="Stably">
-  </a>
-</p>
-
-<h3 align="center">
-  <a href="https://stably.ai">Stably</a>
-</h3>
-
-<p align="center">
-  Code. Ship. <s>Test.</s>
-</p>
-
-<p align="center">
-  <a href="https://docs.stably.ai/"><strong>Documentation</strong></a> ·
-  <a href="https://stably.ai/"><strong>Homepage</strong></a>
-</p>
-<br/>
+[Orca](https://github.com/stablyai/orca) - ADE for 100x builders

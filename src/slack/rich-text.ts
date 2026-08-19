@@ -3,8 +3,10 @@ type InlineStyle = { bold?: true; italic?: true; strike?: true; code?: true };
 type InlineElement =
   | { type: "text"; text: string; style?: InlineStyle }
   | { type: "link"; url: string; text?: string; style?: InlineStyle }
+  | { type: "emoji"; name: string }
   | { type: "user"; user_id: string; style?: InlineStyle }
   | { type: "channel"; channel_id: string; style?: InlineStyle }
+  | { type: "usergroup"; usergroup_id: string; style?: InlineStyle }
   | { type: "broadcast"; range: "here" | "channel" | "everyone"; style?: InlineStyle };
 
 type RichTextElement =
@@ -61,11 +63,13 @@ const emphasisSpan = (marker: string): string =>
 const INLINE_RE = new RegExp(
   [
     "`([^`]+)`",
+    "(?:^|(?<=[^A-Za-z0-9_])):([a-zA-Z0-9_+-]+):(?![A-Za-z0-9_+-])",
     emphasisSpan("*"),
     emphasisSpan("_"),
     emphasisSpan("~"),
     "<@([UWB][A-Z0-9]+)(?:\\|[^>]*)?>",
-    "<#(C[A-Z0-9]+)(?:\\|[^>]*)?>",
+    "<#([CG][A-Z0-9]+)(?:\\|[^>]*)?>",
+    "<!subteam\\^([A-Z0-9]+)(?:\\|[^>]*)?>",
     "<!(here|channel|everyone)(?:\\|[^>]*)?>",
     "<([^>|]+)\\|([^>]+)>",
     "<([^>|]+)>",
@@ -75,21 +79,27 @@ const INLINE_RE = new RegExp(
   "g",
 );
 
-/** Merge an enclosing span's style into every element the span produced. */
+/**
+ * Merge an enclosing span's style into every element the span produced.
+ * Emoji elements carry no style field in Slack's rich_text schema, so they
+ * pass through unchanged.
+ */
 function withStyle(elements: InlineElement[], style: InlineStyle): InlineElement[] {
-  return elements.map((element) => ({ ...element, style: { ...element.style, ...style } }));
+  return elements.map((element) =>
+    element.type === "emoji" ? element : { ...element, style: { ...element.style, ...style } },
+  );
 }
 
 /**
  * Parse mrkdwn inline formatting into Slack rich_text inline elements.
  *
- * Handles: *bold*, _italic_, ~strike~, `code`, <url|label>, <url>
+ * Handles: *bold*, _italic_, ~strike~, `code`, :emoji:, <url|label>, <url>
  *
- * Emphasis spans are parsed recursively so a mention, broadcast, or link inside
- * one becomes a real entity element carrying the span's style, exactly as
- * Slack's own server-side mrkdwn parser does. Without the recursion the span
- * body was emitted as literal styled text and `*<@U…> hi*` posted the raw
- * `<@U…>` characters instead of a mention.
+ * Emphasis spans are parsed recursively so a mention, broadcast, channel ref,
+ * usergroup, emoji, or link inside one becomes a real entity element carrying
+ * the span's style, exactly as Slack's own server-side mrkdwn parser does.
+ * Without the recursion the span body was emitted as literal styled text and
+ * `*<@U…> hi*` posted the raw `<@U…>` characters instead of a mention.
  */
 export function parseInlineElements(text: string): InlineElement[] {
   const elements: InlineElement[] = [];
@@ -111,11 +121,13 @@ export function parseInlineElements(text: string): InlineElement[] {
     const [
       ,
       code,
+      emojiName,
       bold,
       italic,
       strike,
       userToken,
       channelToken,
+      usergroupToken,
       broadcastToken,
       linkUrl,
       linkText,
@@ -125,6 +137,8 @@ export function parseInlineElements(text: string): InlineElement[] {
     ] = match;
     if (code != null) {
       elements.push({ type: "text", text: code, style: { code: true } });
+    } else if (emojiName != null) {
+      elements.push({ type: "emoji", name: emojiName });
     } else if (bold != null) {
       elements.push(...withStyle(parseInlineElements(bold), { bold: true }));
     } else if (italic != null) {
@@ -137,14 +151,18 @@ export function parseInlineElements(text: string): InlineElement[] {
       // `<#C…|label>` is a channel ref, not a link. Without this branch it fell
       // through to the labelled-link branch and posted a dead `#C…` link.
       elements.push({ type: "channel", channel_id: channelToken });
+    } else if (usergroupToken != null) {
+      elements.push({ type: "usergroup", usergroup_id: usergroupToken });
     } else if (broadcastToken != null) {
       elements.push({
         type: "broadcast",
         range: broadcastToken as "here" | "channel" | "everyone",
       });
-    } else if (linkUrl != null && linkText != null) {
+    } else if (linkUrl != null && linkText != null && isSlackManualLinkUrl(linkUrl)) {
       elements.push({ type: "link", url: linkUrl, text: linkText });
-    } else if (bareUrl != null && /^https?:\/\//i.test(bareUrl)) {
+    } else if (linkUrl != null && linkText != null) {
+      elements.push({ type: "text", text: `<${linkUrl}|${linkText}>` });
+    } else if (bareUrl != null && isSlackManualLinkUrl(bareUrl)) {
       elements.push({ type: "link", url: bareUrl });
     } else if (bareUrl != null) {
       elements.push({ type: "text", text: `<${bareUrl}>` });
@@ -165,6 +183,10 @@ export function parseInlineElements(text: string): InlineElement[] {
   }
 
   return elements.length > 0 ? elements : [{ type: "text", text }];
+}
+
+function isSlackManualLinkUrl(value: string): boolean {
+  return /^(?:https?:\/\/|mailto:)/i.test(value);
 }
 
 /**
