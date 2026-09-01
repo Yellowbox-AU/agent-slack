@@ -43,6 +43,7 @@ export async function searchMessagesViaSearchApi(
     channel_id: string;
     message_ts: string;
     permalink?: string;
+    match: Record<string, unknown>;
   }[] = [];
   for (const m of matches) {
     const ts = getString(m.ts)?.trim() ?? "";
@@ -63,6 +64,7 @@ export async function searchMessagesViaSearchApi(
       channel_id: channelId,
       message_ts: ts,
       permalink: getString(m.permalink),
+      match: m,
     });
     if (messageRefs.length >= input.limit) {
       break;
@@ -75,29 +77,42 @@ export async function searchMessagesViaSearchApi(
   const out: SearchCompactMessage[] = [];
 
   for (const ref of messageRefs) {
-    let full: SlackMessageSummary | null = null;
-    try {
-      const parsed =
-        ref.permalink && typeof ref.permalink === "string"
-          ? (() => {
-              try {
-                return parseSlackMessageUrl(ref.permalink);
-              } catch {
-                return null;
-              }
-            })()
-          : null;
+    // The search.messages match already carries everything the search output
+    // needs (text, blocks, files, user, permalink), so build the summary from
+    // it directly instead of re-fetching every hit via conversations.history —
+    // that per-hit round trip made large searches take ~0.4s per result. The
+    // fetch remains only as a catch-clause fallback for a malformed match.
+    let full = summaryFromSearchMatch(ref.match, ref.channel_id, ref.message_ts);
+    if (!full) {
+      try {
+        const parsed =
+          ref.permalink && typeof ref.permalink === "string"
+            ? (() => {
+                try {
+                  return parseSlackMessageUrl(ref.permalink);
+                } catch {
+                  return null;
+                }
+              })()
+            : null;
 
-      full = await fetchMessage(client, {
-        ref: {
-          workspace_url: parsed?.workspace_url ?? input.workspace_url ?? "",
-          channel_id: ref.channel_id,
-          message_ts: ref.message_ts,
-          thread_ts_hint: parsed?.thread_ts_hint,
-          raw: parsed?.raw ?? ref.permalink ?? `${ref.channel_id}:${ref.message_ts}`,
-        },
-      });
-    } catch {
+        full = await fetchMessage(client, {
+          ref: {
+            workspace_url: parsed?.workspace_url ?? input.workspace_url ?? "",
+            channel_id: ref.channel_id,
+            message_ts: ref.message_ts,
+            thread_ts_hint: parsed?.thread_ts_hint,
+            raw: parsed?.raw ?? ref.permalink ?? `${ref.channel_id}:${ref.message_ts}`,
+          },
+        });
+      } catch {
+        continue;
+      }
+    }
+
+    // Filter on the message's own files BEFORE downloading, so a text-only
+    // search never downloads attachments it is about to discard.
+    if (!summaryPassesContentTypeFilter(full, input.contentType)) {
       continue;
     }
 
@@ -114,9 +129,6 @@ export async function searchMessagesViaSearchApi(
       maxBodyChars: input.maxContentChars,
       downloadedPaths,
     });
-    if (!passesContentTypeFilter(compact, input.contentType)) {
-      continue;
-    }
     resolvedMessages.push(full);
     out.push(toSearchCompactMessage(compact, ref.permalink));
     if (out.length >= input.limit) {
@@ -274,6 +286,67 @@ export async function searchMessagesInChannelsFallback(
     messages: results,
     referenced_users: toReferencedUsers(referencedUserIds, usersById),
   };
+}
+
+// Build a message summary straight from a search.messages match. Returns null
+// when the match carries no renderable content at all, in which case the caller
+// falls back to fetching the message individually.
+function summaryFromSearchMatch(
+  m: Record<string, unknown>,
+  channelId: string,
+  ts: string,
+): SlackMessageSummary | null {
+  const text = getString(m.text);
+  const blocks = Array.isArray(m.blocks) ? (m.blocks as unknown[]) : undefined;
+  const files = asArray(m.files)
+    .map((f) => toSlackFileSummary(f))
+    .filter((f): f is SlackFileSummary => f !== null);
+  if (text === undefined && !blocks && files.length === 0) {
+    return null;
+  }
+  return {
+    channel_id: channelId,
+    ts,
+    thread_ts: getString(m.thread_ts),
+    reply_count: getNumber(m.reply_count),
+    user: getString(m.user),
+    bot_id: getString(m.bot_id),
+    text: text ?? "",
+    markdown: slackMrkdwnToMarkdown(text ?? ""),
+    blocks,
+    attachments: Array.isArray(m.attachments) ? (m.attachments as unknown[]) : undefined,
+    files: files.length > 0 ? files : undefined,
+  };
+}
+
+// Content-type filtering on the message's own file list. The compact-message
+// variant below filters on downloaded paths, which only works after downloads
+// have run; this one is download-independent so it can run first.
+function summaryPassesContentTypeFilter(
+  msg: SlackMessageSummary,
+  contentType: ContentType,
+): boolean {
+  if (contentType === "any") {
+    return true;
+  }
+  const files = msg.files ?? [];
+  const hasFiles = files.length > 0;
+  if (contentType === "text") {
+    return !hasFiles;
+  }
+  if (!hasFiles) {
+    return false;
+  }
+  if (contentType === "file") {
+    return true;
+  }
+  if (contentType === "snippet") {
+    return files.some((f) => f.mode === "snippet");
+  }
+  if (contentType === "image") {
+    return files.some((f) => String(f.mimetype ?? "").startsWith("image/"));
+  }
+  return true;
 }
 
 export function passesContentTypeFilter(m: CompactSlackMessage, contentType: ContentType): boolean {
