@@ -1,11 +1,10 @@
 import type { SlackApiClient, SlackAuth } from "./client.ts";
 import type { CompactSlackMessage, SlackFileSummary, SlackMessageSummary } from "./messages.ts";
-import { fetchMessage, toCompactMessage } from "./messages.ts";
+import { toCompactMessage } from "./messages.ts";
 import { resolveChannelId } from "./channels.ts";
 import { ensureDownloadsDir } from "../lib/tmp-paths.ts";
 import { type DownloadResult, tryDownloadSlackFile, writeDownloadErrorFile } from "./files.ts";
 import { renderSlackMessageContent } from "./render.ts";
-import { parseSlackMessageUrl } from "./url.ts";
 import { inferExt } from "./search-file-ext.ts";
 import { dateToUnixSeconds, resolveUserId } from "./search-query.ts";
 import { asArray, getNumber, getString, isRecord } from "../lib/object-type-guards.ts";
@@ -78,37 +77,11 @@ export async function searchMessagesViaSearchApi(
 
   for (const ref of messageRefs) {
     // The search.messages match already carries everything the search output
-    // needs (text, blocks, files, user, permalink), so build the summary from
-    // it directly instead of re-fetching every hit via conversations.history —
-    // that per-hit round trip made large searches take ~0.4s per result. The
-    // fetch remains only as a catch-clause fallback for a malformed match.
-    let full = summaryFromSearchMatch(ref.match, ref.channel_id, ref.message_ts);
-    if (!full) {
-      try {
-        const parsed =
-          ref.permalink && typeof ref.permalink === "string"
-            ? (() => {
-                try {
-                  return parseSlackMessageUrl(ref.permalink);
-                } catch {
-                  return null;
-                }
-              })()
-            : null;
-
-        full = await fetchMessage(client, {
-          ref: {
-            workspace_url: parsed?.workspace_url ?? input.workspace_url ?? "",
-            channel_id: ref.channel_id,
-            message_ts: ref.message_ts,
-            thread_ts_hint: parsed?.thread_ts_hint,
-            raw: parsed?.raw ?? ref.permalink ?? `${ref.channel_id}:${ref.message_ts}`,
-          },
-        });
-      } catch {
-        continue;
-      }
-    }
+    // needs (text, blocks, files, attachments, user, permalink), so build the
+    // summary from it directly instead of re-fetching every hit via
+    // conversations.history — that per-hit round trip made large searches take
+    // ~0.4s per result for no measured gain in output detail.
+    const full = summaryFromSearchMatch(ref.match, ref.channel_id, ref.message_ts);
 
     // Filter on the message's own files BEFORE downloading, so a text-only
     // search never downloads attachments it is about to discard.
@@ -288,22 +261,20 @@ export async function searchMessagesInChannelsFallback(
   };
 }
 
-// Build a message summary straight from a search.messages match. Returns null
-// when the match carries no renderable content at all, in which case the caller
-// falls back to fetching the message individually.
+// Build a message summary straight from a search.messages match. Matches
+// always carry a text key (empirically 513/513 across 12 real queries), so no
+// per-message fallback fetch is needed; a hypothetical textless match simply
+// renders with empty content, same as a caption-less file post.
 function summaryFromSearchMatch(
   m: Record<string, unknown>,
   channelId: string,
   ts: string,
-): SlackMessageSummary | null {
+): SlackMessageSummary {
   const text = getString(m.text);
   const blocks = Array.isArray(m.blocks) ? (m.blocks as unknown[]) : undefined;
   const files = asArray(m.files)
     .map((f) => toSlackFileSummary(f))
     .filter((f): f is SlackFileSummary => f !== null);
-  if (text === undefined && !blocks && files.length === 0) {
-    return null;
-  }
   return {
     channel_id: channelId,
     ts,
