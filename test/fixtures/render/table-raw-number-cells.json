@@ -1,0 +1,24 @@
+{
+  "text": "Weekly counts fallback text",
+  "blocks": [
+    {
+      "type": "table",
+      "block_id": "tbl-num",
+      "rows": [
+        [
+          { "type": "raw_text", "text": "Metric" },
+          { "type": "raw_text", "text": "Value" }
+        ],
+        [
+          { "type": "raw_text", "text": "Signups" },
+          { "type": "raw_number", "value": 120 }
+        ],
+        [
+          { "type": "raw_text", "text": "Conversion" },
+          { "type": "raw_number", "value": "3.5" }
+        ],
+        [{ "type": "raw_text", "text": "Broken cell" }, { "type": "raw_number" }]
+      ]
+    }
+  ]
+}

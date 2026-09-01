@@ -1,0 +1,5 @@
+| Metric | Value |
+| --- | --- |
+| Signups | 120 |
+| Conversion | 3.5 |
+| Broken cell |  |
