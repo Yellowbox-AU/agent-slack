@@ -28,7 +28,23 @@ build "bun-darwin-x64" "agent-slack-darwin-x64"
 # Cross-compiled Mach-O binaries from `bun build --compile` may carry an
 # invalid signature blob that causes macOS to SIGKILL (Killed: 9) on launch.
 # `codesign --sign -` stamps a valid ad-hoc signature.
-if command -v codesign >/dev/null 2>&1; then
+#
+# Yellowbox fork releases set MACOS_SIGN_IDENTITY (and MACOS_NOTARY_PROFILE, a
+# `notarytool store-credentials` keychain profile) to sign with the Developer ID
+# under the hardened runtime, with the JIT entitlements Bun needs, and notarize.
+if [ -n "${MACOS_SIGN_IDENTITY:-}" ]; then
+  for f in "$outdir"/agent-slack-darwin-*; do
+    printf '%s\n' "Signing $f ($MACOS_SIGN_IDENTITY)"
+    codesign --force --options runtime --timestamp \
+      --entitlements "$(dirname "$0")/macos-entitlements.plist" \
+      --sign "$MACOS_SIGN_IDENTITY" "$f"
+  done
+  if [ -n "${MACOS_NOTARY_PROFILE:-}" ]; then
+    zip -j -q "$outdir/notarize.zip" "$outdir"/agent-slack-darwin-*
+    xcrun notarytool submit "$outdir/notarize.zip" --keychain-profile "$MACOS_NOTARY_PROFILE" --wait
+    rm -f "$outdir/notarize.zip"
+  fi
+elif command -v codesign >/dev/null 2>&1; then
   for f in "$outdir"/agent-slack-darwin-*; do
     printf '%s\n' "Signing $f"
     codesign --sign - --force "$f"
