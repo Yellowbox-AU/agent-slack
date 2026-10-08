@@ -2,7 +2,7 @@ import type { SlackMessageRef } from "./url.ts";
 import type { SlackApiClient } from "./client.ts";
 import { slackMrkdwnToMarkdown } from "./mrkdwn.ts";
 import { asArray, getNumber, getString, isRecord } from "../lib/object-type-guards.ts";
-import { enrichFiles, toSlackFileSummary } from "./message-api-parsing.ts";
+import { enrichFiles, enrichMessageFiles, toSlackFileSummary } from "./message-api-parsing.ts";
 
 export type SlackFileSummary = {
   id: string;
@@ -196,7 +196,6 @@ export async function fetchChannelHistory(
       const files = asArray(m.files)
         .map((f) => toSlackFileSummary(f))
         .filter((f): f is SlackFileSummary => f !== null);
-      const enrichedFiles = files.length > 0 ? await enrichFiles(client, files) : undefined;
 
       const text = getString(m.text) ?? "";
       out.push({
@@ -210,7 +209,7 @@ export async function fetchChannelHistory(
         markdown: slackMrkdwnToMarkdown(text),
         blocks: Array.isArray(m.blocks) ? (m.blocks as unknown[]) : undefined,
         attachments: Array.isArray(m.attachments) ? (m.attachments as unknown[]) : undefined,
-        files: enrichedFiles,
+        files: files.length > 0 ? files : undefined,
         reactions: Array.isArray(m.reactions) ? (m.reactions as unknown[]) : undefined,
       });
       if (out.length >= limit) {
@@ -233,6 +232,8 @@ export async function fetchChannelHistory(
     }
     cursorLatest = nextLatest;
   }
+
+  await enrichMessageFiles(client, out);
 
   // conversations.history returns newest-first; normalize to chronological.
   out.sort((a, b) => Number.parseFloat(a.ts) - Number.parseFloat(b.ts));
@@ -287,7 +288,6 @@ export async function fetchThread(
       const files = asArray(m.files)
         .map((f) => toSlackFileSummary(f))
         .filter((f): f is SlackFileSummary => f !== null);
-      const enrichedFiles = files.length > 0 ? await enrichFiles(client, files) : undefined;
 
       const text = getString(m.text) ?? "";
       out.push({
@@ -301,7 +301,7 @@ export async function fetchThread(
         markdown: slackMrkdwnToMarkdown(text),
         blocks: Array.isArray(m.blocks) ? (m.blocks as unknown[]) : undefined,
         attachments: Array.isArray(m.attachments) ? (m.attachments as unknown[]) : undefined,
-        files: enrichedFiles,
+        files: files.length > 0 ? files : undefined,
         reactions: Array.isArray(m.reactions) ? (m.reactions as unknown[]) : undefined,
       });
     }
@@ -312,6 +312,8 @@ export async function fetchThread(
     }
     cursor = next;
   }
+
+  await enrichMessageFiles(client, out);
 
   // Slack returns newest-first for some methods; normalize to chronological.
   out.sort((a, b) => Number.parseFloat(a.ts) - Number.parseFloat(b.ts));
