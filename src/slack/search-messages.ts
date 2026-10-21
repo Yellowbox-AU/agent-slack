@@ -3,9 +3,8 @@ import type { CompactSlackMessage, SlackFileSummary, SlackMessageSummary } from 
 import { toCompactMessage } from "./messages.ts";
 import { resolveChannelId } from "./channels.ts";
 import { ensureDownloadsDir } from "../lib/tmp-paths.ts";
-import { type DownloadResult, tryDownloadSlackFile, writeDownloadErrorFile } from "./files.ts";
+import { type DownloadResult, downloadSlackFileOrCanvas, writeDownloadErrorFile } from "./files.ts";
 import { renderSlackMessageContent } from "./render.ts";
-import { inferExt } from "./search-file-ext.ts";
 import { dateToUnixSeconds, resolveUserId } from "./search-query.ts";
 import { asArray, getNumber, getString, isRecord } from "../lib/object-type-guards.ts";
 import { slackMrkdwnToMarkdown } from "./mrkdwn.ts";
@@ -363,17 +362,14 @@ async function downloadFilesForMessage(input: {
     if (input.downloadedPaths[f.id]) {
       continue;
     }
-    const url = f.url_private_download || f.url_private;
-    if (!url) {
+    const result = await downloadSlackFileOrCanvas({
+      auth: input.auth,
+      destDir: input.downloadsDir,
+      file: f,
+    });
+    if (!result) {
       continue;
     }
-    const ext = inferExt(f);
-    const result = await tryDownloadSlackFile({
-      auth: input.auth,
-      url,
-      destDir: input.downloadsDir,
-      preferredName: `${f.id}${ext ? `.${ext}` : ""}`,
-    });
     if (!result.ok) {
       input.downloadedPaths[f.id] = {
         ...result,

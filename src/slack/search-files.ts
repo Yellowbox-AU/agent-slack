@@ -1,12 +1,24 @@
 import type { SlackApiClient, SlackAuth } from "./client.ts";
 import { ensureDownloadsDir } from "../lib/tmp-paths.ts";
 import { resolveChannelId } from "./channels.ts";
-import { tryDownloadSlackFile } from "./files.ts";
-import { inferExt } from "./search-file-ext.ts";
+import { downloadSlackFileOrCanvas } from "./files.ts";
 import { dateToUnixSeconds, resolveUserId } from "./search-query.ts";
 import { asArray, getString, isRecord } from "../lib/object-type-guards.ts";
 
 export type ContentType = "any" | "text" | "image" | "snippet" | "file";
+
+function fileForDownload(id: string, f: Record<string, unknown>) {
+  return {
+    id,
+    mode: getString(f.mode),
+    mimetype: getString(f.mimetype),
+    filetype: getString(f.filetype),
+    name: getString(f.name),
+    title: getString(f.title),
+    url_private: getString(f.url_private),
+    url_private_download: getString(f.url_private_download),
+  };
+}
 
 export async function searchFilesViaSearchApi(
   client: SlackApiClient,
@@ -32,26 +44,18 @@ export async function searchFilesViaSearchApi(
     if (!passesFileContentTypeFilter({ mode, mimetype }, input.contentType)) {
       continue;
     }
-    const url = getString(f.url_private_download) ?? getString(f.url_private);
-    if (!url) {
-      continue;
-    }
-    const ext = inferExt({
-      mimetype,
-      filetype: getString(f.filetype),
-      name: getString(f.name),
-      title: getString(f.title),
-    });
     const id = getString(f.id);
     if (!id) {
       continue;
     }
-    const result = await tryDownloadSlackFile({
+    const result = await downloadSlackFileOrCanvas({
       auth: input.auth,
-      url,
       destDir: downloadsDir,
-      preferredName: `${id}${ext ? `.${ext}` : ""}`,
+      file: fileForDownload(id, f),
     });
+    if (!result) {
+      continue;
+    }
     if (!result.ok) {
       console.warn(`Warning: skipping file ${id}: ${result.error}`);
       continue;
@@ -122,27 +126,18 @@ export async function searchFilesInChannelsFallback(
           continue;
         }
 
-        const url = getString(f.url_private_download) ?? getString(f.url_private);
-        if (!url) {
-          continue;
-        }
-
-        const ext = inferExt({
-          mimetype,
-          filetype: getString(f.filetype),
-          name: getString(f.name),
-          title: getString(f.title),
-        });
         const id = getString(f.id);
         if (!id) {
           continue;
         }
-        const result = await tryDownloadSlackFile({
+        const result = await downloadSlackFileOrCanvas({
           auth: input.auth,
-          url,
           destDir: downloadsDir,
-          preferredName: `${id}${ext ? `.${ext}` : ""}`,
+          file: fileForDownload(id, f),
         });
+        if (!result) {
+          continue;
+        }
         if (!result.ok) {
           console.warn(`Warning: skipping file ${id}: ${result.error}`);
           continue;

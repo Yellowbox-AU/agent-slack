@@ -1,8 +1,10 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 import type { SlackAuth } from "./client.ts";
 import { existsSync } from "node:fs";
 import { getUserAgent } from "../lib/version.ts";
+import { htmlToMarkdown } from "./html-to-md.ts";
+import { inferExt } from "./search-file-ext.ts";
 
 export class SlackDownloadError extends Error {
   constructor(
@@ -112,6 +114,84 @@ export async function writeDownloadErrorFile(input: {
   const path = join(absDir, sanitizeFilename(`${input.fileId}.download-error.txt`));
   await writeFile(path, `${input.error}\n`, "utf8");
   return path;
+}
+
+const CANVAS_MODES = new Set(["canvas", "quip", "docs"]);
+
+function looksLikeAuthPage(html: string): boolean {
+  return /<form[^>]+signin|data-qa="signin|<title>[^<]*Sign\s*in/i.test(html);
+}
+
+// Canvases download as HTML, which downloadSlackFile would otherwise report as
+// an auth failure; convert them to markdown instead.
+async function downloadCanvasAsMarkdown(input: {
+  auth: SlackAuth;
+  fileId: string;
+  url: string;
+  destDir: string;
+}): Promise<string> {
+  const htmlPath = await downloadSlackFile({
+    auth: input.auth,
+    url: input.url,
+    destDir: input.destDir,
+    preferredName: `${input.fileId}.html`,
+    options: { allowHtml: true },
+  });
+  const html = await readFile(htmlPath, "utf8");
+  if (looksLikeAuthPage(html)) {
+    throw new SlackDownloadError(
+      "Downloaded auth/login page instead of canvas content (token may be expired)",
+    );
+  }
+  const markdownPath = join(resolve(input.destDir), sanitizeFilename(`${input.fileId}.md`));
+  await writeFile(markdownPath, htmlToMarkdown(html).trim(), "utf8");
+  return markdownPath;
+}
+
+/**
+ * Download one Slack file into destDir: a canvas as markdown, anything else as
+ * is. Returns null when the file has no download URL.
+ */
+export async function downloadSlackFileOrCanvas(input: {
+  auth: SlackAuth;
+  destDir: string;
+  file: {
+    id: string;
+    mode?: string;
+    mimetype?: string;
+    filetype?: string;
+    name?: string;
+    title?: string;
+    url_private?: string;
+    url_private_download?: string;
+  };
+}): Promise<DownloadResult | null> {
+  const { auth, destDir, file } = input;
+  const isCanvas = file.mode != null && CANVAS_MODES.has(file.mode);
+  const url = isCanvas
+    ? file.url_private || file.url_private_download
+    : file.url_private_download || file.url_private;
+  if (!url) {
+    return null;
+  }
+  if (!isCanvas) {
+    const ext = inferExt(file);
+    return tryDownloadSlackFile({
+      auth,
+      url,
+      destDir,
+      preferredName: `${file.id}${ext ? `.${ext}` : ""}`,
+    });
+  }
+  try {
+    const path = await downloadCanvasAsMarkdown({ auth, fileId: file.id, url, destDir });
+    return { ok: true, path };
+  } catch (err) {
+    if (err instanceof SlackDownloadError) {
+      return { ok: false, error: err.message, httpStatus: err.httpStatus };
+    }
+    throw err;
+  }
 }
 
 function sanitizeFilename(name: string): string {

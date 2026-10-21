@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { searchMessagesViaSearchApi } from "../src/slack/search-messages.ts";
 import type { SlackApiClient, SlackAuth } from "../src/slack/client.ts";
 
@@ -152,5 +155,61 @@ describe("searchMessagesViaSearchApi (summary built from raw match)", () => {
     );
 
     expect(result.messages.map((m) => m.content)).toEqual(["msg 0", "msg 1"]);
+  });
+});
+
+describe("searchMessagesViaSearchApi downloads", () => {
+  test("saves an attached canvas as markdown instead of an HTML auth-failure error", async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), "agent-slack-test-"));
+    const originalXdg = process.env.XDG_RUNTIME_DIR;
+    const originalFetch = globalThis.fetch;
+    const requested: string[] = [];
+    process.env.XDG_RUNTIME_DIR = tempDir;
+    globalThis.fetch = (async (url: string) => {
+      requested.push(String(url));
+      return new Response('<div class="quip-canvas-content"><h1>Plan</h1><p>Ship it</p></div>', {
+        status: 200,
+        headers: { "content-type": "text/html" },
+      });
+    }) as unknown as typeof globalThis.fetch;
+
+    try {
+      const result = await searchMessagesViaSearchApi(clientThatMustNotBeCalled, {
+        auth,
+        slack_query: "test",
+        limit: 20,
+        maxContentChars: 8000,
+        contentType: "any",
+        download: true,
+        rawMatches: [
+          {
+            ts: "1756000003.000100",
+            channel: { id: "C11111111" },
+            user: "U11111111",
+            text: "summary and transcript",
+            files: [
+              {
+                id: "F9",
+                name: "Plan",
+                mimetype: "application/vnd.slack-docs",
+                mode: "quip",
+                url_private: "https://files.slack.com/files-pri/T1-F9/canvas",
+                url_private_download: "https://files.slack.com/files-pri/T1-F9/download/canvas",
+              },
+            ],
+          },
+        ],
+      });
+
+      expect(requested).toEqual(["https://files.slack.com/files-pri/T1-F9/canvas"]);
+      const file = result.messages[0]!.files![0]!;
+      expect(file.error).toBeUndefined();
+      expect(file.path!.endsWith("/F9.md")).toBe(true);
+      expect(await Bun.file(file.path!).text()).toBe("# Plan\n\nShip it");
+    } finally {
+      globalThis.fetch = originalFetch;
+      process.env.XDG_RUNTIME_DIR = originalXdg;
+      await rm(tempDir, { recursive: true, force: true });
+    }
   });
 });

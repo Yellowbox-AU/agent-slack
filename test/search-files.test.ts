@@ -74,6 +74,36 @@ describe("searchFilesViaSearchApi", () => {
     });
     expect(result[0]!.path.endsWith("/F2.txt")).toBe(true);
   });
+
+  test("saves a canvas as markdown instead of reporting its HTML as an auth failure", async () => {
+    process.env.XDG_RUNTIME_DIR = tempDir;
+    setFetchSequence([
+      new Response('<div class="quip-canvas-content"><h1>Plan</h1><p>Ship it</p></div>', {
+        status: 200,
+        headers: { "content-type": "text/html" },
+      }),
+    ]);
+
+    const result = await searchFilesViaSearchApi({} as SlackApiClient, {
+      auth: AUTH,
+      slack_query: "plan",
+      limit: 5,
+      contentType: "any",
+      rawMatches: [
+        {
+          id: "F3",
+          title: "Plan",
+          mimetype: "application/vnd.slack-docs",
+          mode: "quip",
+          url_private: "https://files.slack.com/files/F3",
+        },
+      ],
+    });
+
+    expect(result).toHaveLength(1);
+    expect(result[0]!.path.endsWith("/F3.md")).toBe(true);
+    expect(await Bun.file(result[0]!.path).text()).toBe("# Plan\n\nShip it");
+  });
 });
 
 describe("searchFilesInChannelsFallback", () => {
